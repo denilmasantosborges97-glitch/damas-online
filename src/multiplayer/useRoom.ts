@@ -7,22 +7,36 @@ import {
   createRoom as createRemoteRoom,
   gameStateFromRoom,
   joinRoom as joinRemoteRoom,
+  claimAbandonment as claimRemoteAbandonment,
+  declineRematch as declineRemoteRematch,
+  proposeDraw as proposeRemoteDraw,
   requestRematch as requestRemoteRematch,
+  resignRoom as resignRemoteRoom,
+  respondToDraw as respondRemoteDraw,
   submitMove as submitRemoteMove,
-  subscribeToRoom
+  subscribeToRoom,
+  updatePlayerPresence
 } from "./roomService";
 import { hasSupabaseConfig, supabase } from "./supabaseClient";
-import type { MoveFeedbackEvent, PlayerSession, PresenceState, ReactionEvent, ReactionValue, RoomSnapshot } from "./types";
+import type { DisconnectState, MoveFeedbackEvent, PlayerSession, PresenceState, ReactionEvent, ReactionValue, RoomSnapshot } from "./types";
 
+const DISCONNECT_TOLERANCE_SECONDS = 60;
 const emptyPresence: PresenceState = {
   connectedPlayers: [],
   opponentDisconnected: false
+};
+
+const emptyDisconnect: DisconnectState = {
+  active: false,
+  remainingSeconds: DISCONNECT_TOLERANCE_SECONDS,
+  reconnected: false
 };
 
 export function useRoom() {
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [session, setSession] = useState<PlayerSession | null>(null);
   const [presence, setPresence] = useState<PresenceState>(emptyPresence);
+  const [disconnect, setDisconnect] = useState<DisconnectState>(emptyDisconnect);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reactionEvent, setReactionEvent] = useState<ReactionEvent | null>(null);
@@ -30,6 +44,8 @@ export function useRoom() {
   const [reactionCooldownUntil, setReactionCooldownUntil] = useState(0);
   const eventChannel = useRef<RealtimeChannel | null>(null);
   const lastReactionAt = useRef<number | null>(null);
+  const disconnectedSince = useRef<number | null>(null);
+  const disconnectTimer = useRef<number | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -43,6 +59,56 @@ export function useRoom() {
       setPresence
     );
   }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    void updatePlayerPresence(session).catch(() => undefined);
+    const timer = window.setInterval(() => {
+      void updatePlayerPresence(session).catch(() => undefined);
+    }, 12_000);
+
+    return () => window.clearInterval(timer);
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || !room || room.status !== "playing" || !presence.opponentDisconnected) {
+      disconnectedSince.current = null;
+      if (disconnect.active) setDisconnect((current) => ({ ...emptyDisconnect, reconnected: current.active }));
+      return;
+    }
+
+    if (!disconnectedSince.current) disconnectedSince.current = Date.now();
+    setDisconnect({
+      active: true,
+      remainingSeconds: DISCONNECT_TOLERANCE_SECONDS,
+      reconnected: false
+    });
+
+    if (disconnectTimer.current) window.clearInterval(disconnectTimer.current);
+    disconnectTimer.current = window.setInterval(() => {
+      const startedAt = disconnectedSince.current;
+      if (!startedAt) return;
+
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const remainingSeconds = Math.max(0, DISCONNECT_TOLERANCE_SECONDS - elapsed);
+      setDisconnect({ active: true, remainingSeconds, reconnected: false });
+
+      if (remainingSeconds === 0) {
+        window.clearInterval(disconnectTimer.current ?? undefined);
+        disconnectTimer.current = null;
+        void runAction(setBusy, setError, async () => {
+          const nextRoom = await claimRemoteAbandonment(session);
+          setRoom(nextRoom);
+        });
+      }
+    }, 1000);
+
+    return () => {
+      if (disconnectTimer.current) window.clearInterval(disconnectTimer.current);
+      disconnectTimer.current = null;
+    };
+  }, [disconnect.active, presence.opponentDisconnected, room, session]);
 
   useEffect(() => {
     if (!session || !supabase) return;
@@ -167,10 +233,47 @@ export function useRoom() {
     });
   }, [session]);
 
+  const resign = useCallback(async () => {
+    if (!session) return;
+
+    await runAction(setBusy, setError, async () => {
+      const nextRoom = await resignRemoteRoom(session);
+      setRoom(nextRoom);
+    });
+  }, [session]);
+
+  const proposeDraw = useCallback(async () => {
+    if (!session) return;
+
+    await runAction(setBusy, setError, async () => {
+      const nextRoom = await proposeRemoteDraw(session);
+      setRoom(nextRoom);
+    });
+  }, [session]);
+
+  const respondToDraw = useCallback(async (accept: boolean) => {
+    if (!session) return;
+
+    await runAction(setBusy, setError, async () => {
+      const nextRoom = await respondRemoteDraw(session, accept);
+      setRoom(nextRoom);
+    });
+  }, [session]);
+
+  const declineRematch = useCallback(async () => {
+    if (!session) return;
+
+    await runAction(setBusy, setError, async () => {
+      const nextRoom = await declineRemoteRematch(session);
+      setRoom(nextRoom);
+    });
+  }, [session]);
+
   const leaveRoom = useCallback(() => {
     setRoom(null);
     setSession(null);
     setPresence(emptyPresence);
+    setDisconnect(emptyDisconnect);
     setError(null);
     setReactionEvent(null);
     setMoveFeedbackEvent(null);
@@ -183,6 +286,7 @@ export function useRoom() {
     room,
     session,
     presence,
+    disconnect,
     gameState,
     legalMoves,
     busy,
@@ -195,6 +299,10 @@ export function useRoom() {
     playMove,
     sendReaction,
     requestRematch,
+    resign,
+    proposeDraw,
+    respondToDraw,
+    declineRematch,
     leaveRoom,
     clearError: () => setError(null)
   };
@@ -211,7 +319,7 @@ async function runAction(
   try {
     await action();
   } catch (error) {
-    setError(error instanceof Error ? error.message : "Algo correu mal.");
+    setError(error instanceof Error ? error.message : "Algo deu errado.");
   } finally {
     setBusy(false);
   }

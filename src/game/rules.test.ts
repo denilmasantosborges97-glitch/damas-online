@@ -190,6 +190,7 @@ describe.each(engines)("regras de damas brasileiras - $name", ({ getLegalMoves, 
 
     expect(next.status).toBe("finished");
     expect(next.winner).toBe("red");
+    expect(next.resultReason).toBe("no_pieces");
   });
 
   it("deteta vitoria quando o adversario fica sem jogadas legais", () => {
@@ -199,15 +200,27 @@ describe.each(engines)("regras de damas brasileiras - $name", ({ getLegalMoves, 
 
     expect(next.status).toBe("finished");
     expect(next.winner).toBe("red");
+    expect(next.resultReason).toBe("no_moves");
   });
 
-  it("declara empate apos 40 meios-lances consecutivos apenas com damas sem captura", () => {
-    const state = makeState([piece("red", 4, 3, true), piece("black", 7, 6, true)], "red", 39);
+  it("declara empate rapido em final 1 dama contra 1 dama apos 12 meios-lances sem captura", () => {
+    const state = makeState([piece("red", 4, 3, true), piece("black", 7, 6, true)], "red", 11);
     const move = moveTo(getLegalMoves(state), { row: 4, col: 3 }, { row: 3, col: 2 })!;
     const next = applyMove(state, move);
 
     expect(next.status).toBe("draw");
     expect(next.winner).toBeNull();
+    expect(next.resultReason).toBe("draw_auto");
+  });
+
+  it("declara empate geral apos 40 meios-lances consecutivos apenas com damas sem captura", () => {
+    const state = makeState([piece("red", 4, 3, true), piece("red", 0, 7, true), piece("black", 7, 6, true)], "red", 39);
+    const move = moveTo(getLegalMoves(state), { row: 4, col: 3 }, { row: 3, col: 2 })!;
+    const next = applyMove(state, move);
+
+    expect(next.status).toBe("draw");
+    expect(next.winner).toBeNull();
+    expect(next.resultReason).toBe("draw_rule");
     expect(getLegalMoves(next)).toHaveLength(0);
   });
 
@@ -230,6 +243,7 @@ describe("estado inicial", () => {
     const state = createInitialGameState();
 
     expect(state.drawPlyCount).toBe(0);
+    expect(state.resultReason).toBeNull();
     expect(state.status).toBe("playing");
   });
 });
@@ -247,6 +261,7 @@ function makeState(pieces: Piece[], currentPlayer: Player = "red", drawPlyCount 
     currentPlayer,
     status: "playing",
     winner: null,
+    resultReason: null,
     revision: 0,
     drawPlyCount
   };

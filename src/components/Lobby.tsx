@@ -1,3 +1,5 @@
+import { FormEvent, useState } from "react";
+
 type LobbyProps = {
   canUseOnline: boolean;
   busy: boolean;
@@ -5,8 +7,6 @@ type LobbyProps = {
   onCreateRoom: () => void;
   onJoinRoom: (code: string) => void;
 };
-
-import { FormEvent, useState } from "react";
 
 export function Lobby({ canUseOnline, busy, error, onCreateRoom, onJoinRoom }: LobbyProps) {
   const [mode, setMode] = useState<"menu" | "join">("menu");
@@ -21,13 +21,13 @@ export function Lobby({ canUseOnline, busy, error, onCreateRoom, onJoinRoom }: L
     <main className="lobby">
       <section className="brand-panel" aria-labelledby="app-title">
         <p className="eyebrow">Damas online</p>
-        <h1 id="app-title">Joga em dois telemóveis</h1>
-        <p className="subtle">Cria uma sala curta, envia o código e joga pela Internet.</p>
+        <h1 id="app-title">Jogue damas online</h1>
+        <p className="subtle">Crie uma sala, compartilhe o código e jogue com outra pessoa pela internet.</p>
       </section>
 
       {!canUseOnline && (
         <div className="notice" role="status">
-          Supabase ainda não está configurado. Preenche o ficheiro .env para ativar as salas online.
+          Supabase ainda não está configurado. Preencha o arquivo .env para ativar as salas online.
         </div>
       )}
 
@@ -37,7 +37,7 @@ export function Lobby({ canUseOnline, busy, error, onCreateRoom, onJoinRoom }: L
             Criar Sala
           </button>
           <button className="secondary-button" type="button" disabled={!canUseOnline || busy} onClick={() => setMode("join")}>
-            Entrar numa Sala
+            Entrar em uma Sala
           </button>
         </section>
       ) : (

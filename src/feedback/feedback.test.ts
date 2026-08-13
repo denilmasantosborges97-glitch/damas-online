@@ -69,10 +69,14 @@ function roomWith(pieces: Piece[], currentPlayer: Player, revision: number): Roo
     board,
     currentPlayer,
     winner: null,
+    resultReason: null,
     revision,
     drawPlyCount: 0,
+    drawOfferPlayer: null,
+    drawOfferCreatedAt: null,
     rematchRed: false,
-    rematchBlack: false
+    rematchBlack: false,
+    rematchDeclinedBy: null
   };
 }
 

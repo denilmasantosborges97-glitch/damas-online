@@ -127,6 +127,7 @@ export function gameStateFromRoom(room: RoomSnapshot): GameState {
     currentPlayer: room.currentPlayer,
     status: room.status,
     winner: room.winner,
+    resultReason: room.resultReason,
     revision: room.revision,
     drawPlyCount: room.drawPlyCount
   };
@@ -140,15 +141,19 @@ function roomFromRecord(record: RoomRecord): RoomSnapshot {
     board: record.board,
     currentPlayer: record.current_player,
     winner: record.winner,
+    resultReason: record.result_reason ?? null,
     revision: record.revision,
     drawPlyCount: record.draw_ply_count ?? 0,
+    drawOfferPlayer: record.draw_offer_player ?? null,
+    drawOfferCreatedAt: record.draw_offer_created_at ?? null,
     rematchRed: record.rematch_red,
-    rematchBlack: record.rematch_black
+    rematchBlack: record.rematch_black,
+    rematchDeclinedBy: record.rematch_declined_by ?? null
   };
 
   const errors = validateGameState(gameStateFromRoom(snapshot));
   if (errors.length > 0) {
-    throw new Error(`Estado partilhado inválido: ${errors.join(" ")}`);
+    throw new Error(`Estado compartilhado inválido: ${errors.join(" ")}`);
   }
 
   return snapshot;
@@ -174,6 +179,58 @@ function firstRow<T>(data: unknown): T {
 
 function assertSupabase(): void {
   if (!supabase) {
-    throw new Error("Configura o Supabase antes de usar salas online.");
+    throw new Error("Configure o Supabase antes de usar salas online.");
   }
+}
+
+export async function resignRoom(session: PlayerSession): Promise<RoomSnapshot> {
+  return callRoomAction("resign_room", session);
+}
+
+export async function proposeDraw(session: PlayerSession): Promise<RoomSnapshot> {
+  return callRoomAction("propose_draw", session);
+}
+
+export async function respondToDraw(session: PlayerSession, accept: boolean): Promise<RoomSnapshot> {
+  assertSupabase();
+
+  const { data, error } = await supabase!.rpc("respond_draw", {
+    p_room_id: session.roomId,
+    p_player_token: session.token,
+    p_accept: accept
+  });
+
+  if (error) throw error;
+  return roomFromRecord(firstRow<RoomRecord>(data));
+}
+
+export async function declineRematch(session: PlayerSession): Promise<RoomSnapshot> {
+  return callRoomAction("decline_rematch", session);
+}
+
+export async function updatePlayerPresence(session: PlayerSession): Promise<void> {
+  assertSupabase();
+
+  const { error } = await supabase!.rpc("update_player_presence", {
+    p_room_id: session.roomId,
+    p_player_token: session.token
+  });
+
+  if (error) throw error;
+}
+
+export async function claimAbandonment(session: PlayerSession): Promise<RoomSnapshot> {
+  return callRoomAction("claim_abandonment", session);
+}
+
+async function callRoomAction(functionName: string, session: PlayerSession): Promise<RoomSnapshot> {
+  assertSupabase();
+
+  const { data, error } = await supabase!.rpc(functionName, {
+    p_room_id: session.roomId,
+    p_player_token: session.token
+  });
+
+  if (error) throw error;
+  return roomFromRecord(firstRow<RoomRecord>(data));
 }

@@ -2,6 +2,7 @@ import type { Board, GameState, Move, MoveStep, Piece, Player, Position } from "
 
 const BOARD_SIZE = 8;
 const DRAW_KING_ONLY_PLY_LIMIT = 40;
+const ONE_KING_EACH_DRAW_PLY_LIMIT = 12;
 
 const forwardByPlayer: Record<Player, number> = {
   red: -1,
@@ -44,6 +45,7 @@ export function createInitialGameState(status: GameState["status"] = "playing"):
     currentPlayer: "red",
     status,
     winner: null,
+    resultReason: null,
     revision: 0,
     drawPlyCount: 0
   };
@@ -112,6 +114,7 @@ export function applyMove(state: GameState, requestedMove: Move): GameState {
     currentPlayer: nextPlayer,
     status: "playing",
     winner: null,
+    resultReason: null,
     revision: state.revision + 1,
     drawPlyCount: nextDrawPlyCount
   };
@@ -125,7 +128,17 @@ export function applyMove(state: GameState, requestedMove: Move): GameState {
       currentPlayer: state.currentPlayer,
       status: "finished",
       winner: state.currentPlayer,
+      resultReason: opponentPieces === 0 ? "no_pieces" : "no_moves",
       drawPlyCount: 0
+    };
+  }
+
+  if (isOneKingEach(nextBoard) && nextDrawPlyCount >= ONE_KING_EACH_DRAW_PLY_LIMIT) {
+    return {
+      ...candidateState,
+      status: "draw",
+      winner: null,
+      resultReason: "draw_auto"
     };
   }
 
@@ -133,7 +146,8 @@ export function applyMove(state: GameState, requestedMove: Move): GameState {
     return {
       ...candidateState,
       status: "draw",
-      winner: null
+      winner: null,
+      resultReason: "draw_rule"
     };
   }
 
@@ -405,6 +419,11 @@ function getPiece(board: Board, position: Position): Piece | null {
 
 function countPieces(board: Board, player: Player): number {
   return board.flat().filter((piece) => piece?.player === player).length;
+}
+
+function isOneKingEach(board: Board): boolean {
+  const pieces = board.flat().filter((piece): piece is Piece => Boolean(piece));
+  return pieces.length === 2 && pieces.every((piece) => piece.king) && countPieces(board, "red") === 1 && countPieces(board, "black") === 1;
 }
 
 function cloneBoard(board: Board): Board {

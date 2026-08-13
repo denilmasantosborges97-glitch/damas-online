@@ -2,6 +2,15 @@ export type Player = "red" | "black";
 
 export type GameStatus = "waiting" | "playing" | "finished" | "draw";
 
+export type ResultReason =
+  | "no_pieces"
+  | "no_moves"
+  | "resignation"
+  | "draw_accepted"
+  | "draw_rule"
+  | "draw_auto"
+  | "abandonment";
+
 export type Position = {
   row: number;
   col: number;
@@ -34,6 +43,7 @@ export type GameState = {
   currentPlayer: Player;
   status: GameStatus;
   winner: Player | null;
+  resultReason: ResultReason | null;
   revision: number;
   drawPlyCount: number;
 };

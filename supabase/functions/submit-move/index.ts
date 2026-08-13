@@ -14,6 +14,7 @@ type RoomRow = {
   board: GameState["board"];
   current_player: Player;
   winner: Player | null;
+  result_reason: GameState["resultReason"] | null;
   revision: number;
   draw_ply_count: number | null;
 };
@@ -65,6 +66,7 @@ serve(async (request) => {
       currentPlayer: room.current_player,
       status: room.status,
       winner: room.winner,
+      resultReason: room.result_reason,
       revision: room.revision,
       drawPlyCount: room.draw_ply_count ?? 0
     };
@@ -78,6 +80,10 @@ serve(async (request) => {
         current_player: nextState.currentPlayer,
         status: nextState.status,
         winner: nextState.winner,
+        result_reason: nextState.resultReason,
+        draw_offer_player: null,
+        draw_offer_created_at: null,
+        rematch_declined_by: null,
         rematch_red: false,
         rematch_black: false,
         revision: room.revision + 1,
@@ -85,7 +91,7 @@ serve(async (request) => {
       })
       .eq("id", room.id)
       .eq("revision", room.revision)
-      .select("id, code, status, board, current_player, winner, revision, draw_ply_count, rematch_red, rematch_black")
+      .select("id, code, status, board, current_player, winner, result_reason, revision, draw_ply_count, draw_offer_player, draw_offer_created_at, rematch_red, rematch_black, rematch_declined_by")
       .single();
 
     if (updateError || !updatedRoom) {

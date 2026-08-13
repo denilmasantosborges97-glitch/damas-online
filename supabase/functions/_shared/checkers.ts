@@ -1,5 +1,13 @@
 export type Player = "red" | "black";
 export type GameStatus = "waiting" | "playing" | "finished" | "draw";
+export type ResultReason =
+  | "no_pieces"
+  | "no_moves"
+  | "resignation"
+  | "draw_accepted"
+  | "draw_rule"
+  | "draw_auto"
+  | "abandonment";
 export type Position = { row: number; col: number };
 export type Piece = { id: string; player: Player; king: boolean };
 export type Board = (Piece | null)[][];
@@ -10,12 +18,14 @@ export type GameState = {
   currentPlayer: Player;
   status: GameStatus;
   winner: Player | null;
+  resultReason: ResultReason | null;
   revision: number;
   drawPlyCount: number;
 };
 
 const BOARD_SIZE = 8;
 const DRAW_KING_ONLY_PLY_LIMIT = 40;
+const ONE_KING_EACH_DRAW_PLY_LIMIT = 12;
 
 const directions = {
   red: -1,
@@ -63,16 +73,22 @@ export function applyMove(state: GameState, requestedMove: Move): GameState {
     currentPlayer: nextPlayer,
     status: "playing",
     winner: null,
+    resultReason: null,
     revision: state.revision + 1,
     drawPlyCount
   };
 
   if (countPieces(board, nextPlayer) === 0 || getLegalMoves(next, nextPlayer).length === 0) {
-    return { ...next, currentPlayer: state.currentPlayer, status: "finished", winner: state.currentPlayer, drawPlyCount: 0 };
+    const reason = countPieces(board, nextPlayer) === 0 ? "no_pieces" : "no_moves";
+    return { ...next, currentPlayer: state.currentPlayer, status: "finished", winner: state.currentPlayer, resultReason: reason, drawPlyCount: 0 };
+  }
+
+  if (isOneKingEach(board) && drawPlyCount >= ONE_KING_EACH_DRAW_PLY_LIMIT) {
+    return { ...next, status: "draw", winner: null, resultReason: "draw_auto" };
   }
 
   if (drawPlyCount >= DRAW_KING_ONLY_PLY_LIMIT) {
-    return { ...next, status: "draw", winner: null };
+    return { ...next, status: "draw", winner: null, resultReason: "draw_rule" };
   }
 
   return next;
@@ -247,6 +263,11 @@ function samePositionList(a: Position[], b: Position[]): boolean {
 
 function countPieces(board: Board, player: Player): number {
   return board.flat().filter((piece) => piece?.player === player).length;
+}
+
+function isOneKingEach(board: Board): boolean {
+  const pieces = board.flat().filter((piece): piece is Piece => Boolean(piece));
+  return pieces.length === 2 && pieces.every((piece) => piece.king) && countPieces(board, "red") === 1 && countPieces(board, "black") === 1;
 }
 
 function cloneBoard(board: Board): Board {
