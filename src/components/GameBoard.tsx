@@ -1,18 +1,32 @@
 import { getMovesForPiece, samePosition } from "../game/rules";
 import type { GameState, Move, Player, Position } from "../game/types";
+import type { CSSProperties } from "react";
 
 type GameBoardProps = {
   gameState: GameState;
   viewer: Player;
   selected: Position | null;
   legalMoves: Move[];
+  lastMove: Move | null;
+  reduceMotion: boolean;
   disabled: boolean;
   onSelect: (position: Position | null) => void;
   onMove: (move: Move) => void;
 };
 
-export function GameBoard({ gameState, viewer, selected, legalMoves, disabled, onSelect, onMove }: GameBoardProps) {
+export function GameBoard({
+  gameState,
+  viewer,
+  selected,
+  legalMoves,
+  lastMove,
+  reduceMotion,
+  disabled,
+  onSelect,
+  onMove
+}: GameBoardProps) {
   const rows = displayIndexes(viewer);
+  const cols = rows;
   const selectedMoves = selected ? legalMoves.filter((move) => samePosition(move.from, selected)) : [];
 
   function handleSquare(position: Position) {
@@ -40,11 +54,17 @@ export function GameBoard({ gameState, viewer, selected, legalMoves, disabled, o
     <div className="board-shell" aria-label="Tabuleiro de damas">
       <div className="board">
         {rows.map((row) =>
-          displayIndexes(viewer).map((col) => {
+          cols.map((col) => {
             const position = { row, col };
             const piece = gameState.board[row][col];
             const isSelected = selected ? samePosition(selected, position) : false;
             const isTarget = selectedMoves.some((move) => samePosition(move.to, position));
+            const isLastFrom = lastMove ? samePosition(lastMove.from, position) : false;
+            const isLastTo = lastMove ? samePosition(lastMove.to, position) : false;
+            const isCaptured = lastMove?.captures.some((capture) => samePosition(capture, position)) ?? false;
+            const isMovingPiece = Boolean(
+              lastMove && piece?.id === lastMove.pieceId && samePosition(lastMove.to, position)
+            );
             const isPlayablePiece =
               !disabled &&
               piece?.player === viewer &&
@@ -59,6 +79,8 @@ export function GameBoard({ gameState, viewer, selected, legalMoves, disabled, o
                   (row + col) % 2 === 1 ? "dark" : "light",
                   isSelected ? "selected" : "",
                   isTarget ? "target" : "",
+                  isLastFrom ? "last-from" : "",
+                  isLastTo ? "last-to" : "",
                   isPlayablePiece ? "playable" : ""
                 ].join(" ")}
                 type="button"
@@ -66,8 +88,20 @@ export function GameBoard({ gameState, viewer, selected, legalMoves, disabled, o
                 onClick={() => handleSquare(position)}
               >
                 {isTarget && <span className="target-dot" />}
+                {isCaptured && !piece && !reduceMotion && (
+                  <span className={`piece capture-ghost ${capturedPlayerFromMove(lastMove)}`} />
+                )}
                 {piece && (
-                  <span className={`piece ${piece.player} ${piece.king ? "king" : ""}`} data-piece-id={piece.id}>
+                  <span
+                    className={[
+                      "piece",
+                      piece.player,
+                      piece.king ? "king" : "",
+                      isMovingPiece && !reduceMotion ? "moving-piece" : ""
+                    ].join(" ")}
+                    style={isMovingPiece && !reduceMotion && lastMove ? slideStyle(lastMove, viewer) : undefined}
+                    data-piece-id={piece.id}
+                  >
                     {piece.king && <span className="king-mark">D</span>}
                   </span>
                 )}
@@ -78,6 +112,30 @@ export function GameBoard({ gameState, viewer, selected, legalMoves, disabled, o
       </div>
     </div>
   );
+}
+
+function slideStyle(move: Move, viewer: Player): CSSProperties {
+  const from = visualPosition(move.from, viewer);
+  const to = visualPosition(move.to, viewer);
+  const squareAsPiecePercent = 100 / 0.78;
+
+  return {
+    "--slide-x": `${(from.col - to.col) * squareAsPiecePercent}%`,
+    "--slide-y": `${(from.row - to.row) * squareAsPiecePercent}%`
+  } as CSSProperties;
+}
+
+function visualPosition(position: Position, viewer: Player): Position {
+  if (viewer === "red") return position;
+
+  return {
+    row: 7 - position.row,
+    col: 7 - position.col
+  };
+}
+
+function capturedPlayerFromMove(move: Move | null): Player {
+  return move?.pieceId.startsWith("red-") ? "black" : "red";
 }
 
 function displayIndexes(viewer: Player): number[] {

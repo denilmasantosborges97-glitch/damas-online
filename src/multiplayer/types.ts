@@ -1,4 +1,4 @@
-import type { Board, GameStatus, Player } from "../game/types";
+import type { Board, GameStatus, Move, Player } from "../game/types";
 
 export type RoomRecord = {
   id: string;
@@ -36,4 +36,20 @@ export type PlayerSession = {
 export type PresenceState = {
   connectedPlayers: Player[];
   opponentDisconnected: boolean;
+};
+
+export type ReactionValue = "👍" | "👏" | "😮" | "GG" | "Boa jogada!";
+
+export type ReactionEvent = {
+  id: string;
+  sender: Player;
+  value: ReactionValue;
+  sentAt: number;
+};
+
+export type MoveFeedbackEvent = {
+  id: string;
+  sender: Player;
+  revision: number;
+  move: Move;
 };
