@@ -1,0 +1,4 @@
+project_id = "iymnvagqktwusjbwsdfg"
+
+[functions.submit-move]
+verify_jwt = false
