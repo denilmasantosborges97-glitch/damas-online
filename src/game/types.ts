@@ -1,6 +1,6 @@
 export type Player = "red" | "black";
 
-export type GameStatus = "waiting" | "playing" | "finished";
+export type GameStatus = "waiting" | "playing" | "finished" | "draw";
 
 export type Position = {
   row: number;
@@ -35,4 +35,5 @@ export type GameState = {
   status: GameStatus;
   winner: Player | null;
   revision: number;
+  drawPlyCount: number;
 };

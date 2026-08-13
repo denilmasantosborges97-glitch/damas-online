@@ -8,6 +8,7 @@ export type RoomRecord = {
   current_player: Player;
   winner: Player | null;
   revision: number;
+  draw_ply_count?: number | null;
   rematch_red: boolean;
   rematch_black: boolean;
 };
@@ -20,6 +21,7 @@ export type RoomSnapshot = {
   currentPlayer: Player;
   winner: Player | null;
   revision: number;
+  drawPlyCount: number;
   rematchRed: boolean;
   rematchBlack: boolean;
 };

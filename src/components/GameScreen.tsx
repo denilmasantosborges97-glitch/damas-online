@@ -30,13 +30,14 @@ export function GameScreen({
 
   const statusText = useMemo(() => {
     if (room.status === "waiting") return "À espera do adversário";
+    if (room.status === "draw") return "Partida empatada";
     if (room.winner) return room.winner === session.player ? "Ganhaste a partida" : "O adversário ganhou";
     if (room.currentPlayer === session.player) return "É a tua vez";
     return "Vez do adversário";
   }, [room.currentPlayer, room.status, room.winner, session.player]);
 
   const waitingForRematch =
-    room.status === "finished" &&
+    (room.status === "finished" || room.status === "draw") &&
     ((session.player === "red" && room.rematchRed) || (session.player === "black" && room.rematchBlack));
 
   return (
@@ -64,7 +65,8 @@ export function GameScreen({
           currentPlayer: room.currentPlayer,
           status: room.status,
           winner: room.winner,
-          revision: room.revision
+          revision: room.revision,
+          drawPlyCount: room.drawPlyCount
         }}
         viewer={session.player}
         selected={selected}
@@ -75,7 +77,7 @@ export function GameScreen({
       />
 
       <footer className="game-footer">
-        {room.status === "finished" ? (
+        {room.status === "finished" || room.status === "draw" ? (
           <button className="primary-button compact" type="button" disabled={busy || waitingForRematch} onClick={onRematch}>
             {waitingForRematch ? "Aguardando nova partida" : "Pedir nova partida"}
           </button>

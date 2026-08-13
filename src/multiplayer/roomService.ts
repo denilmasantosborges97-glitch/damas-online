@@ -127,7 +127,8 @@ export function gameStateFromRoom(room: RoomSnapshot): GameState {
     currentPlayer: room.currentPlayer,
     status: room.status,
     winner: room.winner,
-    revision: room.revision
+    revision: room.revision,
+    drawPlyCount: room.drawPlyCount
   };
 }
 
@@ -140,6 +141,7 @@ function roomFromRecord(record: RoomRecord): RoomSnapshot {
     currentPlayer: record.current_player,
     winner: record.winner,
     revision: record.revision,
+    drawPlyCount: record.draw_ply_count ?? 0,
     rematchRed: record.rematch_red,
     rematchBlack: record.rematch_black
   };

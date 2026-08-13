@@ -15,6 +15,7 @@ type RoomRow = {
   current_player: Player;
   winner: Player | null;
   revision: number;
+  draw_ply_count: number | null;
 };
 
 serve(async (request) => {
@@ -64,7 +65,8 @@ serve(async (request) => {
       currentPlayer: room.current_player,
       status: room.status,
       winner: room.winner,
-      revision: room.revision
+      revision: room.revision,
+      drawPlyCount: room.draw_ply_count ?? 0
     };
 
     const nextState = applyMove(currentState, move);
@@ -78,11 +80,12 @@ serve(async (request) => {
         winner: nextState.winner,
         rematch_red: false,
         rematch_black: false,
-        revision: room.revision + 1
+        revision: room.revision + 1,
+        draw_ply_count: nextState.drawPlyCount
       })
       .eq("id", room.id)
       .eq("revision", room.revision)
-      .select("id, code, status, board, current_player, winner, revision, rematch_red, rematch_black")
+      .select("id, code, status, board, current_player, winner, revision, draw_ply_count, rematch_red, rematch_black")
       .single();
 
     if (updateError || !updatedRoom) {

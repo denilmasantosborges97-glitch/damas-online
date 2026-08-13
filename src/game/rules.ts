@@ -1,6 +1,7 @@
 import type { Board, GameState, Move, MoveStep, Piece, Player, Position } from "./types";
 
 const BOARD_SIZE = 8;
+const DRAW_KING_ONLY_PLY_LIMIT = 40;
 
 const forwardByPlayer: Record<Player, number> = {
   red: -1,
@@ -11,6 +12,13 @@ const opponentOf: Record<Player, Player> = {
   red: "black",
   black: "red"
 };
+
+const diagonalDirections: Position[] = [
+  { row: -1, col: -1 },
+  { row: -1, col: 1 },
+  { row: 1, col: -1 },
+  { row: 1, col: 1 }
+];
 
 export function createInitialBoard(): Board {
   return Array.from({ length: BOARD_SIZE }, (_, row) =>
@@ -36,7 +44,8 @@ export function createInitialGameState(status: GameState["status"] = "playing"):
     currentPlayer: "red",
     status,
     winner: null,
-    revision: 0
+    revision: 0,
+    drawPlyCount: 0
   };
 }
 
@@ -57,7 +66,7 @@ export function getLegalMoves(state: GameState, player: Player = state.currentPl
   if (state.status !== "playing" || state.winner) return [];
 
   const captures = getAllCaptureMoves(state.board, player);
-  if (captures.length > 0) return captures;
+  if (captures.length > 0) return keepMajorityCaptures(captures);
 
   return getAllSimpleMoves(state.board, player);
 }
@@ -80,7 +89,7 @@ export function applyMove(state: GameState, requestedMove: Move): GameState {
   const piece = getPiece(nextBoard, legalMove.from);
 
   if (!piece) {
-    throw new Error("A peça já não existe nessa casa.");
+    throw new Error("A peca ja nao existe nessa casa.");
   }
 
   nextBoard[legalMove.from.row][legalMove.from.col] = null;
@@ -96,12 +105,15 @@ export function applyMove(state: GameState, requestedMove: Move): GameState {
   nextBoard[legalMove.to.row][legalMove.to.col] = promotedPiece;
 
   const nextPlayer = opponentOf[state.currentPlayer];
+  const nextDrawPlyCount =
+    piece.king && legalMove.captures.length === 0 ? state.drawPlyCount + 1 : 0;
   const candidateState: GameState = {
     board: nextBoard,
     currentPlayer: nextPlayer,
     status: "playing",
     winner: null,
-    revision: state.revision + 1
+    revision: state.revision + 1,
+    drawPlyCount: nextDrawPlyCount
   };
 
   const opponentPieces = countPieces(nextBoard, nextPlayer);
@@ -112,7 +124,16 @@ export function applyMove(state: GameState, requestedMove: Move): GameState {
       ...candidateState,
       currentPlayer: state.currentPlayer,
       status: "finished",
-      winner: state.currentPlayer
+      winner: state.currentPlayer,
+      drawPlyCount: 0
+    };
+  }
+
+  if (nextDrawPlyCount >= DRAW_KING_ONLY_PLY_LIMIT) {
+    return {
+      ...candidateState,
+      status: "draw",
+      winner: null
     };
   }
 
@@ -139,11 +160,11 @@ export function validateGameState(state: GameState): string[] {
       if (!piece) return;
 
       if (!isDarkSquare({ row: rowIndex, col: colIndex })) {
-        errors.push("Há uma peça numa casa clara.");
+        errors.push("Ha uma peca numa casa clara.");
       }
 
       if (pieceIds.has(piece.id)) {
-        errors.push(`ID de peça duplicado: ${piece.id}.`);
+        errors.push(`ID de peca duplicado: ${piece.id}.`);
       }
 
       pieceIds.add(piece.id);
@@ -152,7 +173,7 @@ export function validateGameState(state: GameState): string[] {
   });
 
   if (counts.red > 12 || counts.black > 12) {
-    errors.push("Há mais peças do que o permitido para um jogador.");
+    errors.push("Ha mais pecas do que o permitido para um jogador.");
   }
 
   return errors;
@@ -167,8 +188,9 @@ export function sameMove(a: Move, b: Move): boolean {
     a.pieceId === b.pieceId &&
     samePosition(a.from, b.from) &&
     samePosition(a.to, b.to) &&
+    samePositionList(a.captures, b.captures) &&
     a.steps.length === b.steps.length &&
-    a.steps.every((step, index) => samePosition(step.to, b.steps[index].to))
+    a.steps.every((step, index) => sameStep(step, b.steps[index]))
   );
 }
 
@@ -176,8 +198,13 @@ function getAllSimpleMoves(board: Board, player: Player): Move[] {
   const moves: Move[] = [];
 
   forEachPiece(board, player, (piece, from) => {
-    for (const direction of movementDirections(piece)) {
-      const to = { row: from.row + direction.row, col: from.col + direction.col };
+    if (piece.king) {
+      moves.push(...getKingSimpleMoves(board, piece, from));
+      return;
+    }
+
+    for (const direction of manMovementDirections(piece)) {
+      const to = add(from, direction);
 
       if (isInsideBoard(to) && !getPiece(board, to)) {
         moves.push({
@@ -190,6 +217,27 @@ function getAllSimpleMoves(board: Board, player: Player): Move[] {
       }
     }
   });
+
+  return moves;
+}
+
+function getKingSimpleMoves(board: Board, piece: Piece, from: Position): Move[] {
+  const moves: Move[] = [];
+
+  for (const direction of diagonalDirections) {
+    let to = add(from, direction);
+
+    while (isInsideBoard(to) && !getPiece(board, to)) {
+      moves.push({
+        pieceId: piece.id,
+        from,
+        to,
+        steps: [{ from, to }],
+        captures: []
+      });
+      to = add(to, direction);
+    }
+  }
 
   return moves;
 }
@@ -213,40 +261,23 @@ function getCaptureSequences(
   previousCaptures: Position[]
 ): Move[] {
   const moves: Move[] = [];
+  const options = piece.king
+    ? getKingCaptureOptions(board, piece, from)
+    : getManCaptureOptions(board, piece, from);
 
-  for (const direction of captureDirections(piece)) {
-    const captured = { row: from.row + direction.row, col: from.col + direction.col };
-    const landing = { row: from.row + direction.row * 2, col: from.col + direction.col * 2 };
-    const capturedPiece = getPiece(board, captured);
-
-    if (
-      !isInsideBoard(captured) ||
-      !isInsideBoard(landing) ||
-      !capturedPiece ||
-      capturedPiece.player === piece.player ||
-      getPiece(board, landing)
-    ) {
-      continue;
-    }
-
+  for (const option of options) {
     const nextBoard = cloneBoard(board);
     nextBoard[from.row][from.col] = null;
-    nextBoard[captured.row][captured.col] = null;
-    nextBoard[landing.row][landing.col] = { ...piece };
+    nextBoard[option.captured.row][option.captured.col] = null;
+    nextBoard[option.to.row][option.to.col] = { ...piece };
 
-    const nextSteps = [...previousSteps, { from, to: landing, captured }];
-    const nextCaptures = [...previousCaptures, captured];
-
-    if (!piece.king && isPromotionRow(piece, landing)) {
-      moves.push(toMove(piece, origin, landing, nextSteps, nextCaptures));
-      continue;
-    }
-
+    const nextSteps = [...previousSteps, { from, to: option.to, captured: option.captured }];
+    const nextCaptures = [...previousCaptures, option.captured];
     const continuations = getCaptureSequences(
       nextBoard,
       piece,
       origin,
-      landing,
+      option.to,
       nextSteps,
       nextCaptures
     );
@@ -254,32 +285,79 @@ function getCaptureSequences(
     if (continuations.length > 0) {
       moves.push(...continuations);
     } else {
-      moves.push(toMove(piece, origin, landing, nextSteps, nextCaptures));
+      moves.push(toMove(piece, origin, option.to, nextSteps, nextCaptures));
     }
   }
 
   return moves;
 }
 
-function movementDirections(piece: Piece): Position[] {
-  if (piece.king) {
-    return [
-      { row: -1, col: -1 },
-      { row: -1, col: 1 },
-      { row: 1, col: -1 },
-      { row: 1, col: 1 }
-    ];
+function getManCaptureOptions(
+  board: Board,
+  piece: Piece,
+  from: Position
+): Array<{ to: Position; captured: Position }> {
+  const options: Array<{ to: Position; captured: Position }> = [];
+
+  for (const direction of diagonalDirections) {
+    const captured = add(from, direction);
+    const landing = add(captured, direction);
+    const capturedPiece = getPiece(board, captured);
+
+    if (
+      isInsideBoard(captured) &&
+      isInsideBoard(landing) &&
+      capturedPiece &&
+      capturedPiece.player !== piece.player &&
+      !getPiece(board, landing)
+    ) {
+      options.push({ to: landing, captured });
+    }
   }
 
+  return options;
+}
+
+function getKingCaptureOptions(
+  board: Board,
+  piece: Piece,
+  from: Position
+): Array<{ to: Position; captured: Position }> {
+  const options: Array<{ to: Position; captured: Position }> = [];
+
+  for (const direction of diagonalDirections) {
+    let cursor = add(from, direction);
+
+    while (isInsideBoard(cursor) && !getPiece(board, cursor)) {
+      cursor = add(cursor, direction);
+    }
+
+    if (!isInsideBoard(cursor)) continue;
+
+    const capturedPiece = getPiece(board, cursor);
+    if (!capturedPiece || capturedPiece.player === piece.player) continue;
+
+    let landing = add(cursor, direction);
+    while (isInsideBoard(landing) && !getPiece(board, landing)) {
+      options.push({ to: landing, captured: cursor });
+      landing = add(landing, direction);
+    }
+  }
+
+  return options;
+}
+
+function keepMajorityCaptures(moves: Move[]): Move[] {
+  const maxCaptures = Math.max(...moves.map((move) => move.captures.length));
+  return moves.filter((move) => move.captures.length === maxCaptures);
+}
+
+function manMovementDirections(piece: Piece): Position[] {
   const forward = forwardByPlayer[piece.player];
   return [
     { row: forward, col: -1 },
     { row: forward, col: 1 }
   ];
-}
-
-function captureDirections(piece: Piece): Position[] {
-  return movementDirections(piece);
 }
 
 function shouldPromote(piece: Piece, position: Position): boolean {
@@ -331,4 +409,22 @@ function countPieces(board: Board, player: Player): number {
 
 function cloneBoard(board: Board): Board {
   return board.map((row) => row.map((piece) => (piece ? { ...piece } : null)));
+}
+
+function add(position: Position, direction: Position): Position {
+  return {
+    row: position.row + direction.row,
+    col: position.col + direction.col
+  };
+}
+
+function sameStep(a: MoveStep, b: MoveStep): boolean {
+  if (!samePosition(a.from, b.from) || !samePosition(a.to, b.to)) return false;
+  if (!a.captured && !b.captured) return true;
+  if (!a.captured || !b.captured) return false;
+  return samePosition(a.captured, b.captured);
+}
+
+function samePositionList(a: Position[], b: Position[]): boolean {
+  return a.length === b.length && a.every((position, index) => samePosition(position, b[index]));
 }
