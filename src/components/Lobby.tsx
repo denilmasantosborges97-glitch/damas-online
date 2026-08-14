@@ -6,9 +6,10 @@ type LobbyProps = {
   error: string | null;
   onCreateRoom: () => void;
   onJoinRoom: (code: string) => void;
+  onBack: () => void;
 };
 
-export function Lobby({ canUseOnline, busy, error, onCreateRoom, onJoinRoom }: LobbyProps) {
+export function Lobby({ canUseOnline, busy, error, onCreateRoom, onJoinRoom, onBack }: LobbyProps) {
   const [mode, setMode] = useState<"menu" | "join">("menu");
   const [code, setCode] = useState("");
 
@@ -21,7 +22,7 @@ export function Lobby({ canUseOnline, busy, error, onCreateRoom, onJoinRoom }: L
     <main className="lobby">
       <section className="brand-panel" aria-labelledby="app-title">
         <p className="eyebrow">Damas online</p>
-        <h1 id="app-title">Jogue damas online</h1>
+        <h1 id="app-title">Jogar com amigo</h1>
         <p className="subtle">Crie uma sala, compartilhe o código e jogue com outra pessoa pela internet.</p>
       </section>
 
@@ -38,6 +39,9 @@ export function Lobby({ canUseOnline, busy, error, onCreateRoom, onJoinRoom }: L
           </button>
           <button className="secondary-button" type="button" disabled={!canUseOnline || busy} onClick={() => setMode("join")}>
             Entrar em uma Sala
+          </button>
+          <button className="ghost-button" type="button" onClick={onBack}>
+            Voltar aos modos
           </button>
         </section>
       ) : (
