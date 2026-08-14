@@ -37,6 +37,7 @@ button {
 .lobby,
 .game-screen {
   min-height: 100svh;
+  min-height: 100dvh;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -155,6 +156,7 @@ h1 {
 
 .setup-screen {
   justify-content: center;
+  min-height: 100dvh;
 }
 
 .setup-panel {
@@ -852,6 +854,78 @@ button:disabled {
 
   .match-actions {
     gap: 5px;
+  }
+}
+
+@media (max-width: 719px), (max-height: 760px) {
+  .setup-screen {
+    height: 100dvh;
+    min-height: 100dvh;
+    justify-content: flex-start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    gap: 12px;
+    padding-top: max(14px, env(safe-area-inset-top));
+    padding-bottom: max(18px, calc(env(safe-area-inset-bottom) + 18px));
+  }
+
+  .setup-screen .brand-panel {
+    flex: 0 0 auto;
+  }
+
+  .setup-screen h1 {
+    font-size: clamp(1.55rem, 8vw, 2.15rem);
+  }
+
+  .setup-screen .subtle {
+    margin-top: 8px;
+    font-size: 0.93rem;
+    line-height: 1.34;
+  }
+
+  .setup-screen .setup-panel {
+    flex: 0 0 auto;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .setup-screen .segmented-list {
+    gap: 7px;
+  }
+
+  .setup-screen .segmented-list button {
+    min-height: 52px;
+    padding: 8px 10px;
+  }
+
+  .setup-screen .action-stack {
+    flex: 0 0 auto;
+    gap: 10px;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media (max-height: 700px) {
+  .setup-screen {
+    gap: 9px;
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+
+  .setup-screen .eyebrow {
+    margin-bottom: 5px;
+  }
+
+  .setup-screen .subtle {
+    margin-top: 6px;
+    font-size: 0.88rem;
+  }
+
+  .setup-screen .setup-panel h2 {
+    font-size: 0.92rem;
+  }
+
+  .setup-screen .segmented-list button {
+    min-height: 48px;
   }
 }
 
