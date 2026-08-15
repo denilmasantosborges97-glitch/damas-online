@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 
 type LobbyProps = {
+  playerName: string;
   canUseOnline: boolean;
   busy: boolean;
   error: string | null;
@@ -9,7 +10,7 @@ type LobbyProps = {
   onBack: () => void;
 };
 
-export function Lobby({ canUseOnline, busy, error, onCreateRoom, onJoinRoom, onBack }: LobbyProps) {
+export function Lobby({ playerName, canUseOnline, busy, error, onCreateRoom, onJoinRoom, onBack }: LobbyProps) {
   const [mode, setMode] = useState<"menu" | "join">("menu");
   const [code, setCode] = useState("");
 
@@ -24,6 +25,7 @@ export function Lobby({ canUseOnline, busy, error, onCreateRoom, onJoinRoom, onB
         <p className="eyebrow">Damas online</p>
         <h1 id="app-title">Jogar com amigo</h1>
         <p className="subtle">Crie uma sala, compartilhe o código e jogue com outra pessoa pela internet.</p>
+        <p className="player-context">Jogando como: <strong>{playerName}</strong></p>
       </section>
 
       {!canUseOnline && (

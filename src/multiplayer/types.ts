@@ -1,4 +1,5 @@
 import type { Board, GameStatus, Move, Player, ResultReason } from "../game/types";
+import type { PlayerNames } from "../playerIdentity/playerLabels";
 
 export type RoomRecord = {
   id: string;
@@ -44,6 +45,7 @@ export type PlayerSession = {
 export type PresenceState = {
   connectedPlayers: Player[];
   opponentDisconnected: boolean;
+  playerNames: PlayerNames;
 };
 
 export type DisconnectState = {

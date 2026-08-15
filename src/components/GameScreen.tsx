@@ -15,6 +15,7 @@ import {
   resultTitle,
   summarizePieces
 } from "../experience/experience";
+import { playerNameFor, victoryTitleFor, type PlayerNames } from "../playerIdentity/playerLabels";
 import type {
   DisconnectState,
   MoveFeedbackEvent,
@@ -26,11 +27,13 @@ import type {
 } from "../multiplayer/types";
 import { FeedbackSettingsButton } from "./FeedbackSettingsButton";
 import { GameBoard } from "./GameBoard";
+import { PlayerIdentityStrip } from "./PlayerIdentityStrip";
 import { ReactionControls } from "./ReactionControls";
 
 type GameScreenProps = {
   room: RoomSnapshot;
   session: PlayerSession;
+  playerName: string;
   presence: PresenceState;
   disconnect: DisconnectState;
   legalMoves: Move[];
@@ -52,6 +55,7 @@ type GameScreenProps = {
 export function GameScreen({
   room,
   session,
+  playerName,
   presence,
   disconnect,
   legalMoves,
@@ -86,6 +90,14 @@ export function GameScreen({
     settings.soundEnabled,
     settings.vibrationEnabled
   );
+  const opponent = session.player === "red" ? "black" : "red";
+  const playerNames: PlayerNames = {
+    ...presence.playerNames,
+    [session.player]: playerName
+  };
+  const redName = playerNameFor("red", playerNames, session.player === "red" ? playerName : "Adversário");
+  const blackName = playerNameFor("black", playerNames, session.player === "black" ? playerName : "Adversário");
+  const opponentName = playerNameFor(opponent, playerNames, "Adversário");
 
   const triggerMoveFeedback = useCallback(
     (move: Move, key: string) => {
@@ -110,11 +122,11 @@ export function GameScreen({
   const statusText = useMemo(() => {
     if (room.status === "waiting") return "Aguardando adversário";
     if (room.status === "draw") return "Partida empatada";
-    if (room.winner) return room.winner === session.player ? "Você venceu" : "Você perdeu";
+    if (room.winner) return room.winner === session.player ? "Você venceu" : `${playerNameFor(room.winner, playerNames, "Adversário")} venceu`;
     if (disconnect.active) return "Partida pausada";
     if (room.currentPlayer === session.player) return "Sua vez";
-    return "Vez do adversário";
-  }, [disconnect.active, room.currentPlayer, room.status, room.winner, session.player]);
+    return `Vez de ${opponentName}`;
+  }, [disconnect.active, opponentName, playerNames, room.currentPlayer, room.status, room.winner, session.player]);
 
   const redSummary = summarizePieces(room.board, "red");
   const blackSummary = summarizePieces(room.board, "black");
@@ -122,12 +134,17 @@ export function GameScreen({
   const outgoingDrawOffer = hasOutgoingDrawOffer(room, session.player);
   const incomingRematch = hasIncomingRematchRequest(room, session.player);
   const outgoingRematch = hasOutgoingRematchRequest(room, session.player);
-  const declinedText = rematchDeclinedText(room, session.player);
+  const declinedText = room.rematchDeclinedBy
+    ? room.rematchDeclinedBy === session.player
+      ? "Você recusou a revanche."
+      : `${opponentName} recusou a revanche.`
+    : rematchDeclinedText(room, session.player);
   const finalTitle = resultTitle(room, session.player);
   const didWin = room.winner === session.player;
   const finalReason = room.status === "draw" || room.status === "finished"
     ? resultReasonText(room.resultReason, didWin)
     : null;
+  const finalModalTitle = room.status === "finished" ? victoryTitleFor(room.winner, playerNames) : finalTitle;
 
   useEffect(() => {
     const previous = previousRoom.current;
@@ -217,14 +234,20 @@ export function GameScreen({
         </div>
       </header>
 
-      <section className="status-strip" aria-live="polite">
-        <span className={`player-chip ${session.player}`}>
-          Suas peças: {session.player === "red" ? "vermelhas" : "pretas"}
-        </span>
-        {room.status === "waiting" && <span>Compartilhe o código para começar.</span>}
-        {room.status === "playing" && !disconnect.active && presence.opponentDisconnected && <span>Reconectando adversário...</span>}
-        {busy && <span>Sincronizando...</span>}
-      </section>
+      <PlayerIdentityStrip
+        redName={redName}
+        blackName={blackName}
+        currentPlayer={room.status === "playing" ? room.currentPlayer : undefined}
+        extra={
+          busy
+            ? "Sincronizando..."
+            : room.status === "waiting"
+              ? "Compartilhe o código para começar."
+              : room.status === "playing" && !disconnect.active && presence.opponentDisconnected
+                ? `Reconectando ${opponentName}...`
+                : null
+        }
+      />
 
       {room.status === "waiting" && (
         <section className="waiting-panel">
@@ -263,12 +286,12 @@ export function GameScreen({
           <>
             <div className="turn-help">
               {outgoingDrawOffer
-                ? "Aguardando resposta do adversário..."
+                ? `Aguardando resposta de ${opponentName}...`
                 : legalMoves.some((move) => move.captures.length > 0) && room.currentPlayer === session.player
                   ? "Captura obrigatória disponível."
                   : room.currentPlayer === session.player
                     ? "Toque em uma peça destacada."
-                    : "Vez do adversário."}
+                    : `Vez de ${opponentName}.`}
             </div>
             <div className="match-actions">
               <button className="ghost-button compact-action" type="button" disabled={busy || !canOfferDraw(room, session.player)} onClick={onProposeDraw}>
@@ -286,14 +309,14 @@ export function GameScreen({
       </footer>
 
       {disconnect.active && (
-        <CenterModal title="Adversário desconectado">
+        <CenterModal title={`${opponentName} desconectou`}>
           <p>Aguardando reconexão...</p>
           <strong>{disconnect.remainingSeconds}s</strong>
         </CenterModal>
       )}
 
       {incomingDrawOffer && (
-        <CenterModal title="Seu adversário propôs um empate.">
+        <CenterModal title={`${opponentName} propôs empate.`}>
           <div className="modal-actions">
             <button className="primary-button compact" type="button" disabled={busy} onClick={() => onRespondDraw(true)}>
               Aceitar
@@ -307,7 +330,7 @@ export function GameScreen({
 
       {incomingRematch && (
         <CenterModal title="Pedido de revanche">
-          <p>Seu adversário quer jogar novamente.</p>
+          <p>{opponentName} pediu revanche.</p>
           <div className="modal-actions">
             <button className="primary-button compact" type="button" disabled={busy} onClick={onRematch}>
               Aceitar revanche
@@ -333,7 +356,7 @@ export function GameScreen({
       )}
 
       {finalTitle && finalReason && (
-        <CenterModal title={finalTitle}>
+        <CenterModal title={finalModalTitle ?? finalTitle}>
           <p>{finalReason}</p>
           <div className="modal-actions">
             <button className="primary-button compact" type="button" disabled={busy || outgoingRematch} onClick={onRematch}>

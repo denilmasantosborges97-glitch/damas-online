@@ -5,12 +5,15 @@ import { useFeedbackSettings } from "../feedback/useFeedbackSettings";
 import { applyMove, createInitialGameState, getLegalMoves } from "../game/rules";
 import type { GameState, Move, Player, Position } from "../game/types";
 import { formatPieceSummary, resultReasonText, summarizePieces } from "../experience/experience";
+import { victoryTitleFor } from "../playerIdentity/playerLabels";
 import { FeedbackSettingsButton } from "./FeedbackSettingsButton";
 import { GameBoard } from "./GameBoard";
+import { PlayerIdentityStrip } from "./PlayerIdentityStrip";
 
 type SoloGameScreenProps = {
   difficulty: AiDifficulty;
   player: Player;
+  playerName: string;
   onChangeSetup: () => void;
   onBackToModes: () => void;
 };
@@ -21,8 +24,12 @@ const difficultyLabel: Record<AiDifficulty, string> = {
   hard: "Difícil"
 };
 
-export function SoloGameScreen({ difficulty, player, onChangeSetup, onBackToModes }: SoloGameScreenProps) {
+export function SoloGameScreen({ difficulty, player, playerName, onChangeSetup, onBackToModes }: SoloGameScreenProps) {
   const computer = player === "red" ? "black" : "red";
+  const playerNames = {
+    [player]: playerName,
+    [computer]: "Computador"
+  };
   const [state, setState] = useState<GameState>(() => createInitialGameState());
   const [selected, setSelected] = useState<Position | null>(null);
   const [lastMove, setLastMove] = useState<Move | null>(null);
@@ -121,6 +128,7 @@ export function SoloGameScreen({ difficulty, player, onChangeSetup, onBackToMode
   const statusText = statusLabel(state, player, thinking);
   const finalTitle = finalTitleFor(state, player);
   const finalReason = finalTitle ? resultReasonText(state.resultReason, state.winner === player) : null;
+  const finalModalTitle = state.status === "finished" ? victoryTitleFor(state.winner, playerNames) : finalTitle;
 
   return (
     <main className={`game-screen ${settings.reduceMotion ? "reduce-motion" : ""}`}>
@@ -148,10 +156,11 @@ export function SoloGameScreen({ difficulty, player, onChangeSetup, onBackToMode
         </div>
       </header>
 
-      <section className="status-strip" aria-live="polite">
-        <span className={`player-chip ${player}`}>Você · {player === "red" ? "Vermelhas" : "Pretas"}</span>
-        <span>Computador · {computer === "red" ? "Vermelhas" : "Pretas"}</span>
-      </section>
+      <PlayerIdentityStrip
+        redName={player === "red" ? playerName : "Computador"}
+        blackName={player === "black" ? playerName : "Computador"}
+        currentPlayer={state.status === "playing" ? state.currentPlayer : undefined}
+      />
 
       <section className="piece-counter" aria-label="Contador de peças">
         <span>{formatPieceSummary("Vermelhas", redSummary)}</span>
@@ -183,7 +192,7 @@ export function SoloGameScreen({ difficulty, player, onChangeSetup, onBackToMode
       </footer>
 
       {finalTitle && finalReason && (
-        <CenterModal title={finalTitle}>
+        <CenterModal title={finalModalTitle ?? finalTitle}>
           <p>{finalReason}</p>
           <div className="modal-actions">
             <button className="primary-button compact" type="button" onClick={restart}>

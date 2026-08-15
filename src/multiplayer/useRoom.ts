@@ -23,7 +23,8 @@ import type { DisconnectState, MoveFeedbackEvent, PlayerSession, PresenceState, 
 const DISCONNECT_TOLERANCE_SECONDS = 60;
 const emptyPresence: PresenceState = {
   connectedPlayers: [],
-  opponentDisconnected: false
+  opponentDisconnected: false,
+  playerNames: {}
 };
 
 const emptyDisconnect: DisconnectState = {
@@ -32,7 +33,7 @@ const emptyDisconnect: DisconnectState = {
   reconnected: false
 };
 
-export function useRoom() {
+export function useRoom(nickname: string | null) {
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [session, setSession] = useState<PlayerSession | null>(null);
   const [presence, setPresence] = useState<PresenceState>(emptyPresence);
@@ -48,17 +49,26 @@ export function useRoom() {
   const disconnectTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || !nickname) return;
 
     return subscribeToRoom(
       session,
+      nickname,
       (nextRoom) => {
         setRoom(nextRoom);
         setError(null);
       },
-      setPresence
+      (nextPresence) => {
+        setPresence((current) => ({
+          ...nextPresence,
+          playerNames: {
+            ...current.playerNames,
+            ...nextPresence.playerNames
+          }
+        }));
+      }
     );
-  }, [session]);
+  }, [nickname, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -152,18 +162,24 @@ export function useRoom() {
       const next = await createRemoteRoom();
       setRoom(next.room);
       setSession(next.session);
-      setPresence(emptyPresence);
+      setPresence({
+        ...emptyPresence,
+        playerNames: nickname ? { [next.session.player]: nickname } : {}
+      });
     });
-  }, []);
+  }, [nickname]);
 
   const joinRoom = useCallback(async (code: string) => {
     await runAction(setBusy, setError, async () => {
       const next = await joinRemoteRoom(code);
       setRoom(next.room);
       setSession(next.session);
-      setPresence(emptyPresence);
+      setPresence({
+        ...emptyPresence,
+        playerNames: nickname ? { [next.session.player]: nickname } : {}
+      });
     });
-  }, []);
+  }, [nickname]);
 
   const playMove = useCallback(
     async (move: Move) => {

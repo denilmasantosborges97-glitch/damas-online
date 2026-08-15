@@ -1,6 +1,7 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { validateGameState } from "../game/rules";
 import type { GameState, Move, Player } from "../game/types";
+import { validateNickname } from "../playerIdentity/identity";
 import { supabase } from "./supabaseClient";
 import type { PlayerSession, PresenceState, RoomRecord, RoomSnapshot } from "./types";
 
@@ -77,6 +78,7 @@ export async function requestRematch(session: PlayerSession): Promise<RoomSnapsh
 
 export function subscribeToRoom(
   session: PlayerSession,
+  nickname: string,
   onRoom: (room: RoomSnapshot) => void,
   onPresence: (presence: PresenceState) => void
 ): () => void {
@@ -111,7 +113,7 @@ export function subscribeToRoom(
     })
     .subscribe((status) => {
       if (status === "SUBSCRIBED") {
-        void presenceChannel.track({ player: session.player, onlineAt: new Date().toISOString() });
+        void presenceChannel.track({ player: session.player, nickname, onlineAt: new Date().toISOString() });
       }
     });
 
@@ -160,15 +162,27 @@ function roomFromRecord(record: RoomRecord): RoomSnapshot {
 }
 
 function readPresence(channel: RealtimeChannel, viewer: Player): PresenceState {
-  const values = Object.values(channel.presenceState()).flat() as Array<{ player?: Player }>;
+  const values = Object.values(channel.presenceState()).flat() as Array<{ player?: Player; nickname?: string }>;
   const connectedPlayers = Array.from(
     new Set(values.map((value) => value.player).filter((player): player is Player => player === "red" || player === "black"))
   );
   const opponent = viewer === "red" ? "black" : "red";
+  const playerNames: PresenceState["playerNames"] = {};
+
+  for (const value of values) {
+    if (value.player !== "red" && value.player !== "black") continue;
+    if (typeof value.nickname !== "string") continue;
+
+    const validation = validateNickname(value.nickname);
+    if (validation.valid) {
+      playerNames[value.player] = validation.nickname;
+    }
+  }
 
   return {
     connectedPlayers,
-    opponentDisconnected: !connectedPlayers.includes(opponent)
+    opponentDisconnected: !connectedPlayers.includes(opponent),
+    playerNames
   };
 }
 
