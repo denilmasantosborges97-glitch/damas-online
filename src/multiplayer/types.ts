@@ -1,4 +1,5 @@
 import type { Board, GameStatus, Move, Player, ResultReason } from "../game/types";
+import type { ChatMessage } from "../chat/chat";
 import type { PlayerNames } from "../playerIdentity/playerLabels";
 
 export type RoomRecord = {
@@ -69,3 +70,5 @@ export type MoveFeedbackEvent = {
   revision: number;
   move: Move;
 };
+
+export type ChatEvent = ChatMessage;

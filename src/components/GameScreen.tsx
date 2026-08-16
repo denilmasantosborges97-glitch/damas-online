@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { shouldIncrementUnread } from "../chat/chat";
+import { useChatSettings } from "../chat/useChatSettings";
 import { deriveMoveFeedback, shouldShowTurnCue } from "../feedback/feedback";
 import { useFeedbackEffects } from "../feedback/useFeedbackEffects";
 import { useFeedbackSettings } from "../feedback/useFeedbackSettings";
@@ -18,6 +20,7 @@ import {
 } from "../experience/experience";
 import { playerNameFor, victoryTitleFor, type PlayerNames } from "../playerIdentity/playerLabels";
 import type {
+  ChatEvent,
   DisconnectState,
   MoveFeedbackEvent,
   PlayerSession,
@@ -27,6 +30,7 @@ import type {
   RoomSnapshot
 } from "../multiplayer/types";
 import { FeedbackSettingsButton } from "./FeedbackSettingsButton";
+import { ChatPanel } from "./ChatPanel";
 import { GameBoard } from "./GameBoard";
 import { PlayerIdentityStrip } from "./PlayerIdentityStrip";
 import { ReactionControls } from "./ReactionControls";
@@ -40,11 +44,13 @@ type GameScreenProps = {
   legalMoves: Move[];
   reactionEvent: ReactionEvent | null;
   moveFeedbackEvent: MoveFeedbackEvent | null;
+  chatMessages: ChatEvent[];
   reactionCooldownUntil: number;
   busy: boolean;
   error: string | null;
   onMove: (move: Move) => void;
   onReaction: (reaction: ReactionValue) => boolean;
+  onChatMessage: (text: string) => { ok: true } | { ok: false; message: string };
   onRematch: () => void;
   onDeclineRematch: () => void;
   onResign: () => void;
@@ -62,11 +68,13 @@ export function GameScreen({
   legalMoves,
   reactionEvent,
   moveFeedbackEvent,
+  chatMessages,
   reactionCooldownUntil,
   busy,
   error,
   onMove,
   onReaction,
+  onChatMessage,
   onRematch,
   onDeclineRematch,
   onResign,
@@ -81,12 +89,16 @@ export function GameScreen({
   const [activeReaction, setActiveReaction] = useState<ReactionEvent | null>(null);
   const [confirmResign, setConfirmResign] = useState(false);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const previousRoom = useRef<RoomSnapshot | null>(null);
   const handledFeedback = useRef(new Set<string>());
+  const handledChatMessages = useRef(new Set<string>());
   const lastMoveTimer = useRef<number | null>(null);
   const turnCueTimer = useRef<number | null>(null);
   const reactionTimer = useRef<number | null>(null);
   const reconnectTimer = useRef<number | null>(null);
+  const { muted: chatMuted, setMuted: setChatMuted } = useChatSettings();
   const { settings, setSoundEnabled, setVibrationEnabled, setReduceMotion } = useFeedbackSettings();
   const { playMoveSound, playCaptureSound, vibrateTurn, vibrateCapture } = useFeedbackEffects(
     settings.soundEnabled,
@@ -147,6 +159,30 @@ export function GameScreen({
     ? resultReasonText(room.resultReason, didWin)
     : null;
   const finalModalTitle = room.status === "finished" ? victoryTitleFor(room.winner, playerNames) : finalTitle;
+
+  useEffect(() => {
+    if (chatOpen) {
+      for (const message of chatMessages) {
+        handledChatMessages.current.add(message.id);
+      }
+      setUnreadChatCount(0);
+      return;
+    }
+
+    let incoming = 0;
+    for (const message of chatMessages) {
+      if (handledChatMessages.current.has(message.id)) continue;
+
+      handledChatMessages.current.add(message.id);
+      if (shouldIncrementUnread({ isChatOpen: chatOpen, muted: chatMuted, message, viewer: session.player })) {
+        incoming += 1;
+      }
+    }
+
+    if (incoming > 0) {
+      setUnreadChatCount((current) => Math.min(9, current + incoming));
+    }
+  }, [chatMessages, chatMuted, chatOpen, session.player]);
 
   useEffect(() => {
     const previous = previousRoom.current;
@@ -244,6 +280,10 @@ export function GameScreen({
             onVibrationChange={setVibrationEnabled}
             onReduceMotionChange={setReduceMotion}
           />
+          <button className="icon-button chat-toggle" type="button" onClick={() => setChatOpen(true)} aria-label="Abrir chat">
+            💬 Chat
+            {unreadChatCount > 0 && <span className="chat-unread-badge">{unreadChatCount}</span>}
+          </button>
           <button className="icon-button" type="button" onClick={onLeave} aria-label="Sair da sala">
             Sair
           </button>
@@ -382,11 +422,27 @@ export function GameScreen({
             <button className="primary-button compact" type="button" disabled={busy || outgoingRematch} onClick={onRematch}>
               {outgoingRematch ? "Aguardando resposta..." : "Pedir revanche"}
             </button>
+            <button className="ghost-button compact" type="button" onClick={() => setChatOpen(true)}>
+              Ver chat
+            </button>
             <button className="ghost-button compact" type="button" onClick={onLeave}>
               Sair
             </button>
           </div>
         </CenterModal>
+      )}
+
+      {chatOpen && (
+        <ChatPanel
+          messages={chatMessages}
+          viewer={session.player}
+          playerNames={playerNames}
+          muted={chatMuted}
+          canSend={room.status === "playing"}
+          onSend={onChatMessage}
+          onMutedChange={setChatMuted}
+          onClose={() => setChatOpen(false)}
+        />
       )}
 
       {error && <p className="error-message floating">{error}</p>}

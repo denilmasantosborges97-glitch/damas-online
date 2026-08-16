@@ -1,5 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { appendChatMessage, canSendChatMessage, validateChatText } from "../chat/chat";
 import { canSendReaction, isReactionValue, REACTION_COOLDOWN_MS } from "../feedback/feedback";
 import { getLegalMoves } from "../game/rules";
 import type { Move } from "../game/types";
@@ -28,11 +29,24 @@ import {
   updatePlayerPresence
 } from "./roomService";
 import { hasSupabaseConfig, supabase } from "./supabaseClient";
-import type { DisconnectState, MoveFeedbackEvent, PlayerSession, PresenceState, ReactionEvent, ReactionValue, RoomSnapshot } from "./types";
+import type {
+  ChatEvent,
+  DisconnectState,
+  MoveFeedbackEvent,
+  PlayerSession,
+  PresenceState,
+  ReactionEvent,
+  ReactionValue,
+  RoomSnapshot
+} from "./types";
 
 export type RoomJoinResult =
   | { ok: true }
   | { ok: false; kind: InviteJoinErrorKind; message: string };
+
+export type ChatSendResult =
+  | { ok: true }
+  | { ok: false; message: string };
 
 const DISCONNECT_TOLERANCE_SECONDS = 60;
 const emptyPresence: PresenceState = {
@@ -56,9 +70,11 @@ export function useRoom(nickname: string | null) {
   const [error, setError] = useState<string | null>(null);
   const [reactionEvent, setReactionEvent] = useState<ReactionEvent | null>(null);
   const [moveFeedbackEvent, setMoveFeedbackEvent] = useState<MoveFeedbackEvent | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatEvent[]>([]);
   const [reactionCooldownUntil, setReactionCooldownUntil] = useState(0);
   const eventChannel = useRef<RealtimeChannel | null>(null);
   const lastReactionAt = useRef<number | null>(null);
+  const lastChatAt = useRef<number | null>(null);
   const disconnectedSince = useRef<number | null>(null);
   const disconnectTimer = useRef<number | null>(null);
 
@@ -153,6 +169,10 @@ export function useRoom(nickname: string | null) {
       .on("broadcast", { event: "move-feedback" }, ({ payload }) => {
         const event = parseMoveFeedbackEvent(payload);
         if (event) setMoveFeedbackEvent(event);
+      })
+      .on("broadcast", { event: "chat-message" }, ({ payload }) => {
+        const event = parseChatEvent(payload);
+        if (event) setChatMessages((current) => appendChatMessage(current, event));
       })
       .subscribe();
 
@@ -328,6 +348,40 @@ export function useRoom(nickname: string | null) {
     [session]
   );
 
+  const sendChatMessage = useCallback(
+    (text: string): ChatSendResult => {
+      if (!session || !nickname) return { ok: false, message: "Chat indisponível agora." };
+      if (room?.status !== "playing") return { ok: false, message: "Chat disponível apenas durante a partida." };
+
+      const validation = validateChatText(text);
+      if (!validation.valid) return { ok: false, message: validation.message };
+
+      const now = Date.now();
+      if (!canSendChatMessage(now, lastChatAt.current)) {
+        return { ok: false, message: "Aguarde um instante antes de enviar outra mensagem." };
+      }
+
+      lastChatAt.current = now;
+      const event: ChatEvent = {
+        id: createEventId(),
+        sender: session.player,
+        senderName: nickname,
+        text: validation.text,
+        sentAt: now
+      };
+
+      setChatMessages((current) => appendChatMessage(current, event));
+      void eventChannel.current?.send({
+        type: "broadcast",
+        event: "chat-message",
+        payload: event
+      });
+
+      return { ok: true };
+    },
+    [nickname, room?.status, session]
+  );
+
   const requestRematch = useCallback(async () => {
     if (!session) return;
 
@@ -381,8 +435,10 @@ export function useRoom(nickname: string | null) {
     setError(null);
     setReactionEvent(null);
     setMoveFeedbackEvent(null);
+    setChatMessages([]);
     setReactionCooldownUntil(0);
     lastReactionAt.current = null;
+    lastChatAt.current = null;
   }, []);
 
   return {
@@ -397,12 +453,14 @@ export function useRoom(nickname: string | null) {
     error,
     reactionEvent,
     moveFeedbackEvent,
+    chatMessages,
     reactionCooldownUntil,
     createRoom,
     joinRoom,
     joinRoomFromInvite,
     playMove,
     sendReaction,
+    sendChatMessage,
     requestRematch,
     resign,
     proposeDraw,
@@ -461,6 +519,28 @@ function parseMoveFeedbackEvent(payload: unknown): MoveFeedbackEvent | null {
     sender: candidate.sender,
     revision: candidate.revision,
     move: candidate.move
+  };
+}
+
+function parseChatEvent(payload: unknown): ChatEvent | null {
+  if (!payload || typeof payload !== "object") return null;
+
+  const candidate = payload as Partial<ChatEvent>;
+  if (typeof candidate.id !== "string") return null;
+  if (candidate.sender !== "red" && candidate.sender !== "black") return null;
+  if (typeof candidate.senderName !== "string") return null;
+  if (typeof candidate.text !== "string") return null;
+  if (typeof candidate.sentAt !== "number") return null;
+
+  const validation = validateChatText(candidate.text);
+  if (!validation.valid) return null;
+
+  return {
+    id: candidate.id,
+    sender: candidate.sender,
+    senderName: candidate.senderName,
+    text: validation.text,
+    sentAt: candidate.sentAt
   };
 }
 

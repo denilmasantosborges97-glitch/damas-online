@@ -104,11 +104,13 @@ export default function App() {
         legalMoves={room.legalMoves}
         reactionEvent={room.reactionEvent}
         moveFeedbackEvent={room.moveFeedbackEvent}
+        chatMessages={room.chatMessages}
         reactionCooldownUntil={room.reactionCooldownUntil}
         busy={room.busy}
         error={room.error}
         onMove={room.playMove}
         onReaction={room.sendReaction}
+        onChatMessage={room.sendChatMessage}
         onRematch={room.requestRematch}
         onDeclineRematch={room.declineRematch}
         onResign={room.resign}
