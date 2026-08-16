@@ -3,9 +3,10 @@ type ModesScreenProps = {
   onEditNickname: () => void;
   onFriend: () => void;
   onComputer: () => void;
+  onCasual: () => void;
 };
 
-export function ModesScreen({ playerName, onEditNickname, onFriend, onComputer }: ModesScreenProps) {
+export function ModesScreen({ playerName, onEditNickname, onFriend, onComputer, onCasual }: ModesScreenProps) {
   return (
     <main className="lobby mode-screen">
       <section className="brand-panel" aria-labelledby="app-title">
@@ -35,11 +36,11 @@ export function ModesScreen({ playerName, onEditNickname, onFriend, onComputer }
             <small>Jogue offline após carregar a página</small>
           </span>
         </button>
-        <button className="mode-card soon" type="button" disabled>
+        <button className="mode-card available" type="button" onClick={onCasual}>
           <span className="mode-icon" aria-hidden="true">🌐</span>
           <span>
             <strong>Casual Online</strong>
-            <small>Em breve</small>
+            <small>Encontrar adversário automaticamente</small>
           </span>
         </button>
         <button className="mode-card soon" type="button" disabled>

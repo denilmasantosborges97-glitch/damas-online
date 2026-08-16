@@ -11,6 +11,16 @@ type RpcRoomResponse = RoomRecord & {
   player: Player;
 };
 
+type CasualQueueResponse = Partial<RoomRecord> & {
+  queue_status: "waiting" | "matched";
+  player_token?: string | null;
+  player?: Player | null;
+};
+
+export type CasualQueueResult =
+  | { status: "waiting" }
+  | { status: "matched"; room: RoomSnapshot; session: PlayerSession };
+
 export async function createRoom(): Promise<{ room: RoomSnapshot; session: PlayerSession }> {
   assertSupabase();
 
@@ -27,6 +37,45 @@ export async function createRoom(): Promise<{ room: RoomSnapshot; session: Playe
       token: row.player_token
     }
   };
+}
+
+export async function enterCasualQueue(playerKey: string, nickname: string): Promise<CasualQueueResult> {
+  assertSupabase();
+
+  const { data, error } = await supabase!.rpc("enter_casual_queue", {
+    p_player_key: playerKey,
+    p_nickname: nickname
+  });
+  if (error) throw error;
+
+  const row = firstRow<CasualQueueResponse>(data);
+  if (row.queue_status === "waiting") return { status: "waiting" };
+
+  if (!row.id || !row.code || !row.player || !row.player_token) {
+    throw new Error("Resposta de matchmaking inválida.");
+  }
+
+  const room = roomFromRecord(row as RoomRecord);
+  return {
+    status: "matched",
+    room,
+    session: {
+      roomId: row.id,
+      code: row.code,
+      player: row.player,
+      token: row.player_token
+    }
+  };
+}
+
+export async function cancelCasualQueue(playerKey: string): Promise<void> {
+  assertSupabase();
+
+  const { error } = await supabase!.rpc("cancel_casual_queue", {
+    p_player_key: playerKey
+  });
+
+  if (error) throw error;
 }
 
 export async function joinRoom(code: string): Promise<{ room: RoomSnapshot; session: PlayerSession }> {

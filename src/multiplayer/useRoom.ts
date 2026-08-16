@@ -5,6 +5,12 @@ import { canSendReaction, isReactionValue, REACTION_COOLDOWN_MS } from "../feedb
 import { getLegalMoves } from "../game/rules";
 import type { Move } from "../game/types";
 import {
+  CASUAL_HEARTBEAT_MS,
+  emptyCasualSearch,
+  getOrCreateCasualPlayerKey,
+  type CasualSearchState
+} from "./casualMatchmaking";
+import {
   classifyInviteJoinError,
   inviteErrorMessage,
   isValidRoomCode,
@@ -14,9 +20,11 @@ import {
 } from "./inviteLink";
 import { forgetRoomSession, loadRoomSession, saveRoomSession } from "./roomSessionStorage";
 import {
+  cancelCasualQueue as cancelRemoteCasualQueue,
   claimAbandonment as claimRemoteAbandonment,
   createRoom as createRemoteRoom,
   declineRematch as declineRemoteRematch,
+  enterCasualQueue as enterRemoteCasualQueue,
   gameStateFromRoom,
   joinRoom as joinRemoteRoom,
   proposeDraw as proposeRemoteDraw,
@@ -71,7 +79,9 @@ export function useRoom(nickname: string | null) {
   const [reactionEvent, setReactionEvent] = useState<ReactionEvent | null>(null);
   const [moveFeedbackEvent, setMoveFeedbackEvent] = useState<MoveFeedbackEvent | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatEvent[]>([]);
+  const [casualSearch, setCasualSearch] = useState<CasualSearchState>(emptyCasualSearch);
   const [reactionCooldownUntil, setReactionCooldownUntil] = useState(0);
+  const casualPlayerKey = useMemo(() => getOrCreateCasualPlayerKey(), []);
   const eventChannel = useRef<RealtimeChannel | null>(null);
   const lastReactionAt = useRef<number | null>(null);
   const lastChatAt = useRef<number | null>(null);
@@ -211,6 +221,83 @@ export function useRoom(nickname: string | null) {
     });
   }, [applyRoomSession]);
 
+  const pollCasualQueue = useCallback(async () => {
+    if (!nickname) {
+      setCasualSearch({ active: false, busy: false, error: "Defina um apelido antes de buscar partida.", startedAt: null });
+      return;
+    }
+
+    try {
+      setCasualSearch((current) => ({
+        active: true,
+        busy: true,
+        error: null,
+        startedAt: current.startedAt ?? Date.now()
+      }));
+
+      const result = await enterRemoteCasualQueue(casualPlayerKey, nickname);
+      if (result.status === "matched") {
+        applyRoomSession(result.room, result.session);
+        setCasualSearch(emptyCasualSearch);
+        return;
+      }
+
+      setCasualSearch((current) => ({
+        active: true,
+        busy: false,
+        error: null,
+        startedAt: current.startedAt ?? Date.now()
+      }));
+    } catch (error) {
+      setCasualSearch((current) => ({
+        active: true,
+        busy: false,
+        error: error instanceof Error ? error.message : "Não foi possível buscar partida agora.",
+        startedAt: current.startedAt ?? Date.now()
+      }));
+    }
+  }, [applyRoomSession, casualPlayerKey, nickname]);
+
+  const startCasualSearch = useCallback(() => {
+    setCasualSearch({ active: true, busy: true, error: null, startedAt: Date.now() });
+    void pollCasualQueue();
+  }, [pollCasualQueue]);
+
+  const cancelCasualSearch = useCallback(async () => {
+    setCasualSearch(emptyCasualSearch);
+    try {
+      await cancelRemoteCasualQueue(casualPlayerKey);
+    } catch (error) {
+      setCasualSearch({
+        active: false,
+        busy: false,
+        error: error instanceof Error ? error.message : "Não foi possível cancelar a busca.",
+        startedAt: null
+      });
+    }
+  }, [casualPlayerKey]);
+
+  useEffect(() => {
+    if (!casualSearch.active) return;
+
+    const timer = window.setInterval(() => {
+      void pollCasualQueue();
+    }, CASUAL_HEARTBEAT_MS);
+
+    return () => window.clearInterval(timer);
+  }, [casualSearch.active, pollCasualQueue]);
+
+  useEffect(() => {
+    if (!casualSearch.active) return;
+
+    function cancelOnExit() {
+      void cancelRemoteCasualQueue(casualPlayerKey).catch(() => undefined);
+    }
+
+    window.addEventListener("pagehide", cancelOnExit);
+    return () => window.removeEventListener("pagehide", cancelOnExit);
+  }, [casualPlayerKey, casualSearch.active]);
+
   const joinRoom = useCallback(async (code: string): Promise<RoomJoinResult> => {
     const normalizedCode = normalizeRoomCode(code);
     if (!isValidRoomCode(normalizedCode)) {
@@ -287,7 +374,7 @@ export function useRoom(nickname: string | null) {
     } finally {
       setBusy(false);
     }
-  }, [applyRoomSession, room, session]);
+  }, [applyRoomSession, nickname, room, session]);
 
   const playMove = useCallback(
     async (move: Move) => {
@@ -449,6 +536,7 @@ export function useRoom(nickname: string | null) {
     disconnect,
     gameState,
     legalMoves,
+    casualSearch,
     busy,
     error,
     reactionEvent,
@@ -456,6 +544,8 @@ export function useRoom(nickname: string | null) {
     chatMessages,
     reactionCooldownUntil,
     createRoom,
+    startCasualSearch,
+    cancelCasualSearch,
     joinRoom,
     joinRoomFromInvite,
     playMove,

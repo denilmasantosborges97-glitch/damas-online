@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { choosePlayerColor, type AiDifficulty, type ColorChoice } from "./ai/checkersAi";
+import { CasualMatchScreen } from "./components/CasualMatchScreen";
 import { GameScreen } from "./components/GameScreen";
 import { Lobby } from "./components/Lobby";
 import { ModesScreen } from "./components/ModesScreen";
@@ -11,7 +12,7 @@ import { inviteErrorMessage, readRoomInviteFromUrl } from "./multiplayer/inviteL
 import { useRoom } from "./multiplayer/useRoom";
 import { usePlayerIdentity } from "./playerIdentity/usePlayerIdentity";
 
-type AppScreen = "modes" | "friend" | "solo-setup" | "solo-game";
+type AppScreen = "modes" | "friend" | "solo-setup" | "solo-game" | "casual";
 type SoloConfig = {
   difficulty: AiDifficulty;
   player: Player;
@@ -169,6 +170,21 @@ export default function App() {
     );
   }
 
+  if (screen === "casual") {
+    return (
+      <CasualMatchScreen
+        playerName={playerIdentity.nickname}
+        canUseOnline={room.hasSupabaseConfig}
+        search={room.casualSearch}
+        onStart={room.startCasualSearch}
+        onCancel={() => {
+          void room.cancelCasualSearch();
+          setScreen("modes");
+        }}
+      />
+    );
+  }
+
   return (
     <>
       <ModesScreen
@@ -176,6 +192,7 @@ export default function App() {
         onEditNickname={() => setEditingNickname(true)}
         onFriend={() => setScreen("friend")}
         onComputer={() => setScreen("solo-setup")}
+        onCasual={() => setScreen("casual")}
       />
       {editingNickname && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Editar apelido">

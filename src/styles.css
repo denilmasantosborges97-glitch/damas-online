@@ -101,6 +101,10 @@ h1 {
   justify-content: center;
 }
 
+.casual-search-screen {
+  justify-content: center;
+}
+
 .mode-grid,
 .setup-panel {
   width: min(100%, 430px);
@@ -227,6 +231,33 @@ h1 {
 
 .profile-modal .profile-form {
   width: 100%;
+}
+
+.casual-search-panel {
+  width: min(100%, 430px);
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ebe1c9;
+  text-align: center;
+}
+
+.casual-search-panel strong,
+.casual-search-panel span {
+  display: block;
+}
+
+.search-pulse {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 4px solid rgba(226, 190, 82, 0.28);
+  border-top-color: #e2be52;
+  animation: search-spin 1100ms linear infinite;
 }
 
 .setup-screen {
@@ -1062,6 +1093,12 @@ button:disabled {
   100% {
     opacity: 0;
     transform: translate(-50%, -18px) scale(0.98);
+  }
+}
+
+@keyframes search-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
