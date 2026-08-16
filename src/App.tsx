@@ -9,6 +9,7 @@ import { SoloGameScreen } from "./components/SoloGameScreen";
 import { SoloSetupScreen } from "./components/SoloSetupScreen";
 import type { Player } from "./game/types";
 import { inviteErrorMessage, readRoomInviteFromUrl } from "./multiplayer/inviteLink";
+import { useGlobalOnlineCount } from "./multiplayer/useGlobalOnlineCount";
 import { useRoom } from "./multiplayer/useRoom";
 import { usePlayerIdentity } from "./playerIdentity/usePlayerIdentity";
 
@@ -21,6 +22,7 @@ type SoloConfig = {
 export default function App() {
   const initialInvite = useMemo(() => readRoomInviteFromUrl(window.location.href), []);
   const playerIdentity = usePlayerIdentity();
+  const onlineCount = useGlobalOnlineCount();
   const room = useRoom(playerIdentity.nickname);
   const [screen, setScreen] = useState<AppScreen>("modes");
   const [soloConfig, setSoloConfig] = useState<SoloConfig | null>(null);
@@ -189,6 +191,7 @@ export default function App() {
     <>
       <ModesScreen
         playerName={playerIdentity.nickname}
+        onlineCount={onlineCount}
         onEditNickname={() => setEditingNickname(true)}
         onFriend={() => setScreen("friend")}
         onComputer={() => setScreen("solo-setup")}

@@ -1,18 +1,29 @@
+import { formatOnlineCountState, type OnlineCountState } from "../multiplayer/globalPresence";
+
 type ModesScreenProps = {
   playerName: string;
+  onlineCount: OnlineCountState;
   onEditNickname: () => void;
   onFriend: () => void;
   onComputer: () => void;
   onCasual: () => void;
 };
 
-export function ModesScreen({ playerName, onEditNickname, onFriend, onComputer, onCasual }: ModesScreenProps) {
+export function ModesScreen({ playerName, onlineCount, onEditNickname, onFriend, onComputer, onCasual }: ModesScreenProps) {
+  const onlineText = formatOnlineCountState(onlineCount);
+
   return (
     <main className="lobby mode-screen">
       <section className="brand-panel" aria-labelledby="app-title">
         <p className="eyebrow">Damas online</p>
         <h1 id="app-title">Jogue damas online</h1>
         <p className="subtle">Escolha como quer jogar. O modo com amigo continua usando salas por código.</p>
+        {onlineText && (
+          <p className="online-counter" aria-live="polite">
+            <span aria-hidden="true" />
+            {onlineText}
+          </p>
+        )}
         <div className="profile-line">
           <span>Jogando como: <strong>{playerName}</strong></span>
           <button className="text-button" type="button" onClick={onEditNickname}>

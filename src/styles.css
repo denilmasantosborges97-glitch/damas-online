@@ -166,6 +166,31 @@ h1 {
   line-height: 1.25;
 }
 
+.online-counter {
+  width: fit-content;
+  margin: 12px 0 0;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(94, 214, 128, 0.24);
+  border-radius: 999px;
+  background: rgba(40, 110, 63, 0.22);
+  color: #d9f7df;
+  font-size: 0.88rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.online-counter span {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 999px;
+  background: #55df7a;
+  box-shadow: 0 0 0 3px rgba(85, 223, 122, 0.14);
+}
+
 .profile-line,
 .player-context {
   margin-top: 12px;
