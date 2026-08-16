@@ -2,6 +2,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { validateGameState } from "../game/rules";
 import type { GameState, Move, Player } from "../game/types";
 import { validateNickname } from "../playerIdentity/identity";
+import { normalizeRoomCode } from "./inviteLink";
 import { supabase } from "./supabaseClient";
 import type { PlayerSession, PresenceState, RoomRecord, RoomSnapshot } from "./types";
 
@@ -31,7 +32,7 @@ export async function createRoom(): Promise<{ room: RoomSnapshot; session: Playe
 export async function joinRoom(code: string): Promise<{ room: RoomSnapshot; session: PlayerSession }> {
   assertSupabase();
 
-  const { data, error } = await supabase!.rpc("join_room", { p_code: code.trim().toUpperCase() });
+  const { data, error } = await supabase!.rpc("join_room", { p_code: normalizeRoomCode(code) });
   if (error) throw error;
 
   const row = firstRow<RpcRoomResponse>(data);
@@ -44,6 +45,24 @@ export async function joinRoom(code: string): Promise<{ room: RoomSnapshot; sess
       token: row.player_token
     }
   };
+}
+
+export async function resumeRoomSession(session: PlayerSession): Promise<RoomSnapshot> {
+  assertSupabase();
+
+  await updatePlayerPresence(session);
+
+  const { data, error } = await supabase!
+    .from("rooms")
+    .select("*")
+    .eq("id", session.roomId)
+    .eq("code", normalizeRoomCode(session.code))
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error("Esta sala não está mais disponível.");
+
+  return roomFromRecord(data as RoomRecord);
 }
 
 export async function submitMove(session: PlayerSession, move: Move): Promise<RoomSnapshot> {

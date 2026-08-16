@@ -4,13 +4,23 @@ import { canSendReaction, isReactionValue, REACTION_COOLDOWN_MS } from "../feedb
 import { getLegalMoves } from "../game/rules";
 import type { Move } from "../game/types";
 import {
+  classifyInviteJoinError,
+  inviteErrorMessage,
+  isValidRoomCode,
+  normalizeRoomCode,
+  planInviteEntry,
+  type InviteJoinErrorKind
+} from "./inviteLink";
+import { forgetRoomSession, loadRoomSession, saveRoomSession } from "./roomSessionStorage";
+import {
+  claimAbandonment as claimRemoteAbandonment,
   createRoom as createRemoteRoom,
+  declineRematch as declineRemoteRematch,
   gameStateFromRoom,
   joinRoom as joinRemoteRoom,
-  claimAbandonment as claimRemoteAbandonment,
-  declineRematch as declineRemoteRematch,
   proposeDraw as proposeRemoteDraw,
   requestRematch as requestRemoteRematch,
+  resumeRoomSession,
   resignRoom as resignRemoteRoom,
   respondToDraw as respondRemoteDraw,
   submitMove as submitRemoteMove,
@@ -19,6 +29,10 @@ import {
 } from "./roomService";
 import { hasSupabaseConfig, supabase } from "./supabaseClient";
 import type { DisconnectState, MoveFeedbackEvent, PlayerSession, PresenceState, ReactionEvent, ReactionValue, RoomSnapshot } from "./types";
+
+export type RoomJoinResult =
+  | { ok: true }
+  | { ok: false; kind: InviteJoinErrorKind; message: string };
 
 const DISCONNECT_TOLERANCE_SECONDS = 60;
 const emptyPresence: PresenceState = {
@@ -157,29 +171,103 @@ export function useRoom(nickname: string | null) {
     return getLegalMoves(gameState);
   }, [gameState, session]);
 
+  const applyRoomSession = useCallback(
+    (nextRoom: RoomSnapshot, nextSession: PlayerSession) => {
+      setRoom(nextRoom);
+      setSession(nextSession);
+      saveRoomSession(nextSession);
+      setPresence({
+        ...emptyPresence,
+        playerNames: nickname ? { [nextSession.player]: nickname } : {}
+      });
+    },
+    [nickname]
+  );
+
   const createRoom = useCallback(async () => {
     await runAction(setBusy, setError, async () => {
       const next = await createRemoteRoom();
-      setRoom(next.room);
-      setSession(next.session);
-      setPresence({
-        ...emptyPresence,
-        playerNames: nickname ? { [next.session.player]: nickname } : {}
-      });
+      applyRoomSession(next.room, next.session);
     });
-  }, [nickname]);
+  }, [applyRoomSession]);
 
-  const joinRoom = useCallback(async (code: string) => {
-    await runAction(setBusy, setError, async () => {
+  const joinRoom = useCallback(async (code: string): Promise<RoomJoinResult> => {
+    const normalizedCode = normalizeRoomCode(code);
+    if (!isValidRoomCode(normalizedCode)) {
+      const message = "Código de sala inválido.";
+      setError(message);
+      return { ok: false, kind: "unavailable", message };
+    }
+
+    try {
+      setBusy(true);
+      setError(null);
       const next = await joinRemoteRoom(code);
-      setRoom(next.room);
-      setSession(next.session);
-      setPresence({
-        ...emptyPresence,
-        playerNames: nickname ? { [next.session.player]: nickname } : {}
+      applyRoomSession(next.room, next.session);
+      return { ok: true };
+    } catch (error) {
+      const kind = classifyInviteJoinError(error);
+      const message = kind === "full" ? "Esta sala já está completa." : error instanceof Error ? error.message : inviteErrorMessage(kind);
+      setError(message);
+      return { ok: false, kind, message };
+    } finally {
+      setBusy(false);
+    }
+  }, [applyRoomSession]);
+
+  const joinRoomFromInvite = useCallback(async (code: string): Promise<RoomJoinResult> => {
+    const normalizedCode = normalizeRoomCode(code);
+    if (!isValidRoomCode(normalizedCode)) {
+      const message = inviteErrorMessage("unavailable");
+      setError(message);
+      return { ok: false, kind: "unavailable", message };
+    }
+
+    try {
+      setBusy(true);
+      setError(null);
+
+      const storedSession = loadRoomSession(normalizedCode);
+      const plan = planInviteEntry({
+        code: normalizedCode,
+        nickname,
+        currentSession: session,
+        hasCurrentRoom: Boolean(room),
+        storedSession
       });
-    });
-  }, [nickname]);
+
+      if (plan.action === "invalid" || plan.action === "wait_for_nickname") {
+        const message = inviteErrorMessage("unavailable");
+        setError(message);
+        return { ok: false, kind: "unavailable", message };
+      }
+
+      if (plan.action === "already_in_room") {
+        return { ok: true };
+      }
+
+      if (plan.action === "resume_local_session") {
+        try {
+          const resumedRoom = await resumeRoomSession(plan.session);
+          applyRoomSession(resumedRoom, plan.session);
+          return { ok: true };
+        } catch {
+          forgetRoomSession(normalizedCode);
+        }
+      }
+
+      const next = await joinRemoteRoom(normalizedCode);
+      applyRoomSession(next.room, next.session);
+      return { ok: true };
+    } catch (error) {
+      const kind = classifyInviteJoinError(error);
+      const message = inviteErrorMessage(kind);
+      setError(message);
+      return { ok: false, kind, message };
+    } finally {
+      setBusy(false);
+    }
+  }, [applyRoomSession, room, session]);
 
   const playMove = useCallback(
     async (move: Move) => {
@@ -312,6 +400,7 @@ export function useRoom(nickname: string | null) {
     reactionCooldownUntil,
     createRoom,
     joinRoom,
+    joinRoomFromInvite,
     playMove,
     sendReaction,
     requestRematch,

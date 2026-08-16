@@ -3,6 +3,7 @@ import { deriveMoveFeedback, shouldShowTurnCue } from "../feedback/feedback";
 import { useFeedbackEffects } from "../feedback/useFeedbackEffects";
 import { useFeedbackSettings } from "../feedback/useFeedbackSettings";
 import type { Move, Position } from "../game/types";
+import { canUseWebShare, createRoomInviteLink, shareRoomInvite } from "../multiplayer/inviteLink";
 import {
   canOfferDraw,
   formatPieceSummary,
@@ -79,6 +80,7 @@ export function GameScreen({
   const [showReconnectCue, setShowReconnectCue] = useState(false);
   const [activeReaction, setActiveReaction] = useState<ReactionEvent | null>(null);
   const [confirmResign, setConfirmResign] = useState(false);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
   const previousRoom = useRef<RoomSnapshot | null>(null);
   const handledFeedback = useRef(new Set<string>());
   const lastMoveTimer = useRef<number | null>(null);
@@ -198,6 +200,20 @@ export function GameScreen({
     onResign();
   }
 
+  async function shareInvite() {
+    setShareMessage(null);
+
+    try {
+      const result = await shareRoomInvite(createRoomInviteLink(room.code));
+      if (result.status === "copied") setShareMessage("Link copiado!");
+      if (result.status === "shared") setShareMessage("Convite pronto para compartilhar.");
+      if (result.status === "unsupported") setShareMessage(result.message);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setShareMessage("Não foi possível compartilhar agora.");
+    }
+  }
+
   return (
     <main className={`game-screen ${settings.reduceMotion ? "reduce-motion" : ""}`}>
       {showTurnCue && (
@@ -253,6 +269,10 @@ export function GameScreen({
         <section className="waiting-panel">
           <strong>Sala: {room.code}</strong>
           <span>Compartilhe o código da sala com quem vai jogar com você.</span>
+          <button className="primary-button share-room-button" type="button" onClick={shareInvite}>
+            {canUseWebShare() ? "Compartilhar sala" : "Copiar link"}
+          </button>
+          {shareMessage && <span className="share-confirmation">{shareMessage}</span>}
         </section>
       )}
 

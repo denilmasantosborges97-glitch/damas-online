@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { choosePlayerColor, type AiDifficulty, type ColorChoice } from "./ai/checkersAi";
 import { GameScreen } from "./components/GameScreen";
 import { Lobby } from "./components/Lobby";
@@ -7,6 +7,7 @@ import { NicknameForm } from "./components/NicknameForm";
 import { SoloGameScreen } from "./components/SoloGameScreen";
 import { SoloSetupScreen } from "./components/SoloSetupScreen";
 import type { Player } from "./game/types";
+import { inviteErrorMessage, readRoomInviteFromUrl } from "./multiplayer/inviteLink";
 import { useRoom } from "./multiplayer/useRoom";
 import { usePlayerIdentity } from "./playerIdentity/usePlayerIdentity";
 
@@ -17,11 +18,64 @@ type SoloConfig = {
 };
 
 export default function App() {
+  const initialInvite = useMemo(() => readRoomInviteFromUrl(window.location.href), []);
   const playerIdentity = usePlayerIdentity();
   const room = useRoom(playerIdentity.nickname);
   const [screen, setScreen] = useState<AppScreen>("modes");
   const [soloConfig, setSoloConfig] = useState<SoloConfig | null>(null);
   const [editingNickname, setEditingNickname] = useState(false);
+  const [inviteCode, setInviteCode] = useState(initialInvite.status === "valid" ? initialInvite.code : null);
+  const [inviteError, setInviteError] = useState<string | null>(
+    initialInvite.status === "invalid" ? inviteErrorMessage("unavailable") : null
+  );
+  const [inviteJoining, setInviteJoining] = useState(false);
+  const inviteAttempted = useRef(false);
+
+  useEffect(() => {
+    if (!playerIdentity.nickname || !inviteCode || room.room || inviteAttempted.current) return;
+
+    inviteAttempted.current = true;
+    setInviteJoining(true);
+    void room
+      .joinRoomFromInvite(inviteCode)
+      .then((result) => {
+        if (!result.ok) {
+          setInviteError(result.message);
+          setInviteCode(null);
+        }
+      })
+      .catch(() => {
+        setInviteError(inviteErrorMessage("unavailable"));
+        setInviteCode(null);
+      })
+      .finally(() => setInviteJoining(false));
+  }, [inviteCode, playerIdentity.nickname, room]);
+
+  function clearInviteUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("room");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function returnToStart() {
+    clearInviteUrl();
+    setInviteCode(null);
+    setInviteError(null);
+    inviteAttempted.current = false;
+    setSoloConfig(null);
+    setScreen("modes");
+  }
+
+  function leaveRoom() {
+    clearInviteUrl();
+    setInviteCode(null);
+    inviteAttempted.current = false;
+    room.leaveRoom();
+  }
+
+  if (inviteError) {
+    return <InviteStatusScreen title={inviteError} onBack={returnToStart} />;
+  }
 
   if (!playerIdentity.nickname) {
     return (
@@ -60,9 +114,13 @@ export default function App() {
         onResign={room.resign}
         onProposeDraw={room.proposeDraw}
         onRespondDraw={room.respondToDraw}
-        onLeave={room.leaveRoom}
+        onLeave={leaveRoom}
       />
     );
+  }
+
+  if (inviteJoining && inviteCode) {
+    return <InviteStatusScreen title="Entrando na sala..." description={`Sala ${inviteCode}`} />;
   }
 
   if (screen === "solo-game" && soloConfig) {
@@ -135,5 +193,32 @@ export default function App() {
         </div>
       )}
     </>
+  );
+}
+
+function InviteStatusScreen({
+  title,
+  description,
+  onBack
+}: {
+  title: string;
+  description?: string;
+  onBack?: () => void;
+}) {
+  return (
+    <main className="lobby invite-status-screen">
+      <section className="brand-panel" aria-live="polite">
+        <p className="eyebrow">Convite de partida</p>
+        <h1>{title}</h1>
+        {description && <p className="subtle">{description}</p>}
+      </section>
+      {onBack && (
+        <section className="action-stack">
+          <button className="primary-button" type="button" onClick={onBack}>
+            Voltar ao início
+          </button>
+        </section>
+      )}
+    </main>
   );
 }

@@ -97,6 +97,10 @@ h1 {
   justify-content: center;
 }
 
+.invite-status-screen {
+  justify-content: center;
+}
+
 .mode-grid,
 .setup-panel {
   width: min(100%, 430px);
@@ -429,9 +433,22 @@ button:disabled {
 
 .waiting-panel {
   display: grid;
-  gap: 5px;
+  gap: 8px;
   padding: 10px 12px;
   line-height: 1.25;
+}
+
+.share-room-button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 2px;
+  box-shadow: 0 6px 0 #7c5a1e;
+}
+
+.share-confirmation {
+  color: #f6e9be;
+  font-weight: 850;
+  text-align: center;
 }
 
 .piece-counter {
