@@ -124,60 +124,62 @@ export function GameBoard({
   return (
     <div className="board-shell" aria-label="Tabuleiro de damas">
       <div className="board">
-        {rows.map((row) =>
-          cols.map((col) => {
-            const position = { row, col };
-            const piece = gameState.board[row][col];
-            const isSelected = selected ? samePosition(selected, position) : false;
-            const positionKeyValue = positionKey(position);
-            const isTarget = selectedTargetKeys.has(positionKeyValue);
-            const isLastFrom = lastMove ? samePosition(lastMove.from, position) : false;
-            const isLastTo = lastMove ? samePosition(lastMove.to, position) : false;
-            const isHiddenAnimatedPiece = Boolean(
-              activeAnimation &&
-                piece?.id === activeAnimation.move.pieceId &&
-                samePosition(activeAnimation.move.to, position)
-            );
-            const isPlayablePiece =
-              !interactionDisabled &&
-              piece?.player === viewer &&
-              piece.player === gameState.currentPlayer &&
-              playableSourceKeys.has(positionKeyValue);
+        <div className="board-grid">
+          {rows.map((row) =>
+            cols.map((col) => {
+              const position = { row, col };
+              const piece = gameState.board[row][col];
+              const isSelected = selected ? samePosition(selected, position) : false;
+              const positionKeyValue = positionKey(position);
+              const isTarget = selectedTargetKeys.has(positionKeyValue);
+              const isLastFrom = lastMove ? samePosition(lastMove.from, position) : false;
+              const isLastTo = lastMove ? samePosition(lastMove.to, position) : false;
+              const isHiddenAnimatedPiece = Boolean(
+                activeAnimation &&
+                  piece?.id === activeAnimation.move.pieceId &&
+                  samePosition(activeAnimation.move.to, position)
+              );
+              const isPlayablePiece =
+                !interactionDisabled &&
+                piece?.player === viewer &&
+                piece.player === gameState.currentPlayer &&
+                playableSourceKeys.has(positionKeyValue);
 
-            return (
-              <button
-                key={`${row}-${col}`}
-                className={[
-                  "square",
-                  (row + col) % 2 === 1 ? "dark" : "light",
-                  isSelected ? "selected" : "",
-                  isTarget ? "target" : "",
-                  isLastFrom ? "last-from" : "",
-                  isLastTo ? "last-to" : "",
-                  isPlayablePiece ? "playable" : ""
-                ].join(" ")}
-                type="button"
-                aria-label={squareLabel(position, piece?.player, piece?.king)}
-                onClick={() => handleSquare(position)}
-              >
-                {isTarget && <span className="target-dot" />}
-                {piece && (
-                  <span
-                    className={[
-                      "piece",
-                      piece.player,
-                      piece.king ? "king" : "",
-                      isHiddenAnimatedPiece ? "piece-animation-placeholder" : ""
-                    ].join(" ")}
-                    data-piece-id={piece.id}
-                  >
-                    <PieceImage piece={piece} />
-                  </span>
-                )}
-              </button>
-            );
-          })
-        )}
+              return (
+                <button
+                  key={`${row}-${col}`}
+                  className={[
+                    "square",
+                    (row + col) % 2 === 1 ? "dark" : "light",
+                    isSelected ? "selected" : "",
+                    isTarget ? "target" : "",
+                    isLastFrom ? "last-from" : "",
+                    isLastTo ? "last-to" : "",
+                    isPlayablePiece ? "playable" : ""
+                  ].join(" ")}
+                  type="button"
+                  aria-label={squareLabel(position, piece?.player, piece?.king)}
+                  onClick={() => handleSquare(position)}
+                >
+                  {isTarget && <span className="target-dot" />}
+                  {piece && (
+                    <span
+                      className={[
+                        "piece",
+                        piece.player,
+                        piece.king ? "king" : "",
+                        isHiddenAnimatedPiece ? "piece-animation-placeholder" : ""
+                      ].join(" ")}
+                      data-piece-id={piece.id}
+                    >
+                      <PieceImage piece={piece} />
+                    </span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
         {animationLayer}
       </div>
     </div>

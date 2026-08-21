@@ -569,16 +569,27 @@ button:disabled {
 }
 
 .board {
+  --board-grid-left: 7.94%;
+  --board-grid-right: 8.17%;
+  --board-grid-top: 8.13%;
+  --board-grid-bottom: 8.69%;
   width: min(94vw, calc(100svh - 198px), 560px);
   aspect-ratio: 1;
+  position: relative;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  background: url("/boards/wood-board.png") center / contain no-repeat;
+  overflow: hidden;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.26);
+}
+
+.board-grid {
+  position: absolute;
+  inset: var(--board-grid-top) var(--board-grid-right) var(--board-grid-bottom) var(--board-grid-left);
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   grid-template-rows: repeat(8, 1fr);
-  position: relative;
-  border: 4px solid #3b3022;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.32);
 }
 
 .square {
@@ -592,11 +603,11 @@ button:disabled {
 }
 
 .square.light {
-  background: #eadbbd;
+  background: transparent;
 }
 
 .square.dark {
-  background: #6f5135;
+  background: transparent;
 }
 
 .square.selected {
@@ -669,7 +680,7 @@ button:disabled {
 
 .board-animation-layer {
   position: absolute;
-  inset: 0;
+  inset: var(--board-grid-top) var(--board-grid-right) var(--board-grid-bottom) var(--board-grid-left);
   pointer-events: none;
   z-index: 6;
 }
