@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Move } from "../game/types";
 import type { ReactionEvent } from "../multiplayer/types";
-import { getOnlineFooterStatus, hasMandatoryCaptureForTurn, reactionToastSide } from "./matchPresentation";
+import {
+  emptyReactionSlots,
+  getOnlineFooterStatus,
+  hasMandatoryCaptureForTurn,
+  placeReactionInSlot,
+  reactionToastSide
+} from "./matchPresentation";
 
 describe("apresentacao da partida online", () => {
   it("remove a dica fixa quando e a vez normal do jogador", () => {
@@ -46,6 +52,17 @@ describe("apresentacao da partida online", () => {
 
     expect(reactionToastSide(ownReaction, "black")).toBe("own");
     expect(reactionToastSide(opponentReaction, "black")).toBe("opponent");
+  });
+
+  it("mantem emotes simultaneos em slots independentes", () => {
+    const ownReaction: ReactionEvent = { id: "own", sender: "red", value: "smile", sentAt: 1 };
+    const opponentReaction: ReactionEvent = { id: "opponent", sender: "black", value: "angry", sentAt: 2 };
+
+    const withOwn = placeReactionInSlot(emptyReactionSlots, ownReaction, "red");
+    const withBoth = placeReactionInSlot(withOwn, opponentReaction, "red");
+
+    expect(withBoth.own).toEqual(ownReaction);
+    expect(withBoth.opponent).toEqual(opponentReaction);
   });
 });
 

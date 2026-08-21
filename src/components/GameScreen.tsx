@@ -35,7 +35,15 @@ import type {
 import { FeedbackSettingsButton } from "./FeedbackSettingsButton";
 import { ChatPanel } from "./ChatPanel";
 import { GameBoard } from "./GameBoard";
-import { getOnlineFooterStatus, hasMandatoryCaptureForTurn, reactionToastSide } from "./matchPresentation";
+import {
+  emptyReactionSlots,
+  getOnlineFooterStatus,
+  hasMandatoryCaptureForTurn,
+  placeReactionInSlot,
+  reactionToastSide,
+  type ReactionSlot,
+  type ReactionSlots
+} from "./matchPresentation";
 import { getVisualMoveDuration } from "./moveAnimation";
 import { PlayerIdentityStrip } from "./PlayerIdentityStrip";
 import { ReactionControls } from "./ReactionControls";
@@ -96,7 +104,7 @@ export function GameScreen({
   const [showTurnCue, setShowTurnCue] = useState(false);
   const [showReconnectCue, setShowReconnectCue] = useState(false);
   const [showRematchAcceptedCue, setShowRematchAcceptedCue] = useState(false);
-  const [activeReaction, setActiveReaction] = useState<ReactionEvent | null>(null);
+  const [activeReactions, setActiveReactions] = useState<ReactionSlots>(emptyReactionSlots);
   const [confirmResign, setConfirmResign] = useState(false);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -106,7 +114,7 @@ export function GameScreen({
   const handledChatMessages = useRef(new Set<string>());
   const lastMoveTimer = useRef<number | null>(null);
   const turnCueTimer = useRef<number | null>(null);
-  const reactionTimer = useRef<number | null>(null);
+  const reactionTimers = useRef<Record<ReactionSlot, number | null>>({ own: null, opponent: null });
   const reconnectTimer = useRef<number | null>(null);
   const rematchAcceptedTimer = useRef<number | null>(null);
   const { muted: chatMuted, setMuted: setChatMuted } = useChatSettings();
@@ -116,7 +124,6 @@ export function GameScreen({
     settings.vibrationEnabled
   );
   const opponent = session.player === "red" ? "black" : "red";
-  const activeReactionAsset = activeReaction ? getReactionAsset(activeReaction.value) : null;
   const playerNames: PlayerNames = {
     ...presence.playerNames,
     [session.player]: playerName
@@ -232,10 +239,18 @@ export function GameScreen({
   useEffect(() => {
     if (!reactionEvent) return;
 
-    setActiveReaction(reactionEvent);
-    if (reactionTimer.current) window.clearTimeout(reactionTimer.current);
-    reactionTimer.current = window.setTimeout(() => setActiveReaction(null), 3000);
-  }, [reactionEvent]);
+    const slot = reactionToastSide(reactionEvent, session.player);
+    setActiveReactions((current) => placeReactionInSlot(current, reactionEvent, session.player));
+
+    if (reactionTimers.current[slot]) window.clearTimeout(reactionTimers.current[slot]!);
+    reactionTimers.current[slot] = window.setTimeout(() => {
+      setActiveReactions((current) => {
+        if (current[slot]?.id !== reactionEvent.id) return current;
+        return { ...current, [slot]: null };
+      });
+      reactionTimers.current[slot] = null;
+    }, 3300);
+  }, [reactionEvent, session.player]);
 
   useEffect(() => {
     if (!disconnect.reconnected) return;
@@ -249,7 +264,8 @@ export function GameScreen({
     return () => {
       if (lastMoveTimer.current) window.clearTimeout(lastMoveTimer.current);
       if (turnCueTimer.current) window.clearTimeout(turnCueTimer.current);
-      if (reactionTimer.current) window.clearTimeout(reactionTimer.current);
+      if (reactionTimers.current.own) window.clearTimeout(reactionTimers.current.own);
+      if (reactionTimers.current.opponent) window.clearTimeout(reactionTimers.current.opponent);
       if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
       if (rematchAcceptedTimer.current) window.clearTimeout(rematchAcceptedTimer.current);
     };
@@ -291,11 +307,8 @@ export function GameScreen({
           Revanche aceita. Nova partida!
         </div>
       )}
-      {activeReaction && activeReactionAsset && (
-        <div className={`reaction-toast ${reactionToastSide(activeReaction, session.player)}`} role="status">
-          <img src={activeReactionAsset.src} alt={activeReactionAsset.label} draggable={false} />
-        </div>
-      )}
+      {renderReactionToast("opponent", activeReactions.opponent)}
+      {renderReactionToast("own", activeReactions.own)}
 
       <header className={`game-header ${room.status === "playing" && room.currentPlayer === session.player ? "your-turn" : ""}`}>
         <div>
@@ -476,6 +489,18 @@ export function GameScreen({
 
       {error && <p className="error-message floating">{error}</p>}
     </main>
+  );
+}
+
+function renderReactionToast(slot: ReactionSlot, reaction: ReactionEvent | null) {
+  if (!reaction) return null;
+
+  const asset = getReactionAsset(reaction.value);
+
+  return (
+    <div key={`${slot}-${reaction.id}`} className={`reaction-toast ${slot}`} role="status">
+      <img src={asset.src} alt={asset.label} draggable={false} />
+    </div>
   );
 }
 

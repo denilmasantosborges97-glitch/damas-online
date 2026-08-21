@@ -1,4 +1,4 @@
-import { getMovesForPiece, samePosition } from "../game/rules";
+import { samePosition } from "../game/rules";
 import type { GameState, Move, Piece, Player, Position } from "../game/types";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -34,9 +34,20 @@ export function GameBoard({
   onSelect,
   onMove
 }: GameBoardProps) {
-  const rows = displayIndexes(viewer);
+  const rows = useMemo(() => displayIndexes(viewer), [viewer]);
   const cols = rows;
-  const selectedMoves = selected ? legalMoves.filter((move) => samePosition(move.from, selected)) : [];
+  const selectedMoves = useMemo(
+    () => (selected ? legalMoves.filter((move) => samePosition(move.from, selected)) : []),
+    [legalMoves, selected]
+  );
+  const selectedTargetKeys = useMemo(
+    () => new Set(selectedMoves.map((move) => positionKey(move.to))),
+    [selectedMoves]
+  );
+  const playableSourceKeys = useMemo(
+    () => new Set(legalMoves.map((move) => positionKey(move.from))),
+    [legalMoves]
+  );
   const [activeAnimation, setActiveAnimation] = useState<BoardMoveAnimation | null>(null);
   const lastAnimatedMove = useRef<Move | null>(null);
   const interactionDisabled = disabled || Boolean(activeAnimation);
@@ -100,9 +111,8 @@ export function GameBoard({
     }
 
     const piece = gameState.board[position.row][position.col];
-    const pieceMoves = getMovesForPiece(gameState, position);
 
-    if (piece?.player === gameState.currentPlayer && piece.player === viewer && pieceMoves.length > 0) {
+    if (piece?.player === gameState.currentPlayer && piece.player === viewer && playableSourceKeys.has(positionKey(position))) {
       onSelect(position);
       return;
     }
@@ -118,7 +128,8 @@ export function GameBoard({
             const position = { row, col };
             const piece = gameState.board[row][col];
             const isSelected = selected ? samePosition(selected, position) : false;
-            const isTarget = selectedMoves.some((move) => samePosition(move.to, position));
+            const positionKeyValue = positionKey(position);
+            const isTarget = selectedTargetKeys.has(positionKeyValue);
             const isLastFrom = lastMove ? samePosition(lastMove.from, position) : false;
             const isLastTo = lastMove ? samePosition(lastMove.to, position) : false;
             const isHiddenAnimatedPiece = Boolean(
@@ -130,7 +141,7 @@ export function GameBoard({
               !interactionDisabled &&
               piece?.player === viewer &&
               piece.player === gameState.currentPlayer &&
-              getMovesForPiece(gameState, position).length > 0;
+              playableSourceKeys.has(positionKeyValue);
 
             return (
               <button
