@@ -640,15 +640,27 @@ button:disabled {
 }
 
 .piece {
-  width: 78%;
+  width: 86%;
   aspect-ratio: 1;
-  border-radius: 50%;
+  border-radius: 0;
   display: grid;
   place-items: center;
   position: relative;
+  background: transparent;
+  box-shadow: none;
   transform: translateZ(0);
   animation: piece-pop 150ms ease-out;
   transition: transform 160ms ease, filter 160ms ease;
+}
+
+.piece-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.26));
 }
 
 .piece.piece-animation-placeholder {
@@ -664,9 +676,9 @@ button:disabled {
 
 .board-overlay-piece {
   position: absolute;
-  width: 9.75%;
-  left: calc((var(--visual-col) * 12.5%) + 1.375%);
-  top: calc((var(--visual-row) * 12.5%) + 1.375%);
+  width: 10.75%;
+  left: calc((var(--visual-col) * 12.5%) + 0.875%);
+  top: calc((var(--visual-row) * 12.5%) + 0.875%);
 }
 
 .piece.animated-moving-piece {
@@ -684,35 +696,21 @@ button:disabled {
 }
 
 .piece.red {
-  background:
-    radial-gradient(circle at 35% 25%, #ff9286 0 10%, transparent 11%),
-    linear-gradient(145deg, #d74641, #8f1f27);
-  box-shadow:
-    inset 0 -7px 0 rgba(82, 13, 19, 0.42),
-    0 5px 0 #65191f;
+  background: transparent;
+  box-shadow: none;
 }
 
 .piece.black {
-  background:
-    radial-gradient(circle at 35% 25%, #827769 0 10%, transparent 11%),
-    linear-gradient(145deg, #40382d, #171511);
-  box-shadow:
-    inset 0 -7px 0 rgba(0, 0, 0, 0.46),
-    0 5px 0 #050504;
+  background: transparent;
+  box-shadow: none;
 }
 
 .piece.king::before {
-  content: "";
-  position: absolute;
-  inset: 18%;
-  border-radius: 50%;
-  border: 3px solid rgba(255, 232, 143, 0.84);
+  content: none;
 }
 
 .king-mark {
-  color: #ffe88f;
-  font-size: clamp(0.8rem, 4vw, 1.45rem);
-  font-weight: 950;
+  display: none;
 }
 
 .game-footer {

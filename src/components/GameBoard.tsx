@@ -10,6 +10,7 @@ import {
   positionKey,
   type VisualMoveStep
 } from "./moveAnimation";
+import { getPieceAsset } from "./pieceAssets";
 
 type GameBoardProps = {
   gameState: GameState;
@@ -170,7 +171,7 @@ export function GameBoard({
                     ].join(" ")}
                     data-piece-id={piece.id}
                   >
-                    {piece.king && <span className="king-mark">D</span>}
+                    <PieceImage piece={piece} />
                   </span>
                 )}
               </button>
@@ -213,7 +214,9 @@ function renderAnimationLayer(animation: BoardMoveAnimation, viewer: Player) {
               isFading ? "fade" : ""
             ].join(" ")}
             style={overlayPieceStyle(capture, viewer)}
-          />
+          >
+            <PieceImage piece={{ player: animation.capturedPlayer, king: false }} />
+          </span>
         );
       })}
       <span
@@ -228,16 +231,22 @@ function renderAnimationLayer(animation: BoardMoveAnimation, viewer: Player) {
         style={movingOverlayStyle(currentStep, viewer)}
         data-piece-id={animation.movingPiece.id}
       >
-        {animation.movingPiece.king && <span className="king-mark">D</span>}
+        <PieceImage piece={animation.movingPiece} />
       </span>
     </div>
   );
 }
 
+function PieceImage({ piece }: { piece: Pick<Piece, "player" | "king"> }) {
+  const asset = getPieceAsset(piece);
+
+  return <img className="piece-image" src={asset.src} alt="" aria-hidden="true" draggable={false} />;
+}
+
 function movingOverlayStyle(step: VisualMoveStep, viewer: Player): CSSProperties {
   const from = visualPosition(step.from, viewer);
   const to = visualPosition(step.to, viewer);
-  const squareAsPiecePercent = 100 / 0.78;
+  const squareAsPiecePercent = 100 / 0.86;
 
   return {
     ...overlayPieceStyle(step.to, viewer),
