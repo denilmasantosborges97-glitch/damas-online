@@ -8,6 +8,7 @@ import { formatPieceSummary, resultReasonText, summarizePieces } from "../experi
 import { victoryTitleFor } from "../playerIdentity/playerLabels";
 import { FeedbackSettingsButton } from "./FeedbackSettingsButton";
 import { GameBoard } from "./GameBoard";
+import { getVisualMoveDuration } from "./moveAnimation";
 import { PlayerIdentityStrip } from "./PlayerIdentityStrip";
 
 type SoloGameScreenProps = {
@@ -61,7 +62,7 @@ export function SoloGameScreen({ difficulty, player, playerName, onChangeSetup, 
       }
 
       if (lastMoveTimer.current) window.clearTimeout(lastMoveTimer.current);
-      lastMoveTimer.current = window.setTimeout(() => setLastMove(null), settings.reduceMotion ? 450 : 950);
+      lastMoveTimer.current = window.setTimeout(() => setLastMove(null), getVisualMoveDuration(move, settings.reduceMotion));
     },
     [playCaptureSound, playMoveSound, settings.reduceMotion, vibrateCapture]
   );

@@ -74,10 +74,29 @@ export function hasIncomingRematchRequest(room: RoomSnapshot, player: Player): b
 
 export function hasOutgoingRematchRequest(room: RoomSnapshot, player: Player): boolean {
   if (room.status !== "finished" && room.status !== "draw") return false;
+  if (room.rematchDeclinedBy) return false;
   return player === "red" ? room.rematchRed && !room.rematchBlack : room.rematchBlack && !room.rematchRed;
+}
+
+export function canRequestRematch(room: RoomSnapshot, player: Player): boolean {
+  if (room.status !== "finished" && room.status !== "draw") return false;
+  if (room.rematchDeclinedBy) return false;
+  return !hasIncomingRematchRequest(room, player) && !hasOutgoingRematchRequest(room, player);
 }
 
 export function rematchDeclinedText(room: RoomSnapshot, player: Player): string | null {
   if (!room.rematchDeclinedBy) return null;
-  return room.rematchDeclinedBy === player ? "Você recusou a revanche." : "O adversário recusou a revanche.";
+  return room.rematchDeclinedBy === player ? "Revanche recusada." : "Seu adversário recusou a revanche.";
+}
+
+export function wasRematchAccepted(previous: RoomSnapshot | null, current: RoomSnapshot): boolean {
+  if (!previous) return false;
+  if (previous.status !== "finished" && previous.status !== "draw") return false;
+  if (current.status !== "playing") return false;
+  if (current.revision <= previous.revision) return false;
+  return (previous.rematchRed || previous.rematchBlack) && !current.rematchRed && !current.rematchBlack && !current.rematchDeclinedBy;
+}
+
+export function shouldShowCasualPostRematchActions(matchMode: "friend" | "casual" | undefined, room: RoomSnapshot): boolean {
+  return matchMode === "casual" && Boolean(room.rematchDeclinedBy) && (room.status === "finished" || room.status === "draw");
 }

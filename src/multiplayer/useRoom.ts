@@ -48,6 +48,8 @@ import type {
   RoomSnapshot
 } from "./types";
 
+type MatchMode = NonNullable<PlayerSession["matchMode"]>;
+
 export type RoomJoinResult =
   | { ok: true }
   | { ok: false; kind: InviteJoinErrorKind; message: string };
@@ -202,13 +204,18 @@ export function useRoom(nickname: string | null) {
   }, [gameState, session]);
 
   const applyRoomSession = useCallback(
-    (nextRoom: RoomSnapshot, nextSession: PlayerSession) => {
+    (nextRoom: RoomSnapshot, nextSession: PlayerSession, matchMode: MatchMode = nextSession.matchMode ?? "friend") => {
+      const sessionWithMode: PlayerSession = {
+        ...nextSession,
+        matchMode
+      };
+
       setRoom(nextRoom);
-      setSession(nextSession);
-      saveRoomSession(nextSession);
+      setSession(sessionWithMode);
+      saveRoomSession(sessionWithMode);
       setPresence({
         ...emptyPresence,
-        playerNames: nickname ? { [nextSession.player]: nickname } : {}
+        playerNames: nickname ? { [sessionWithMode.player]: nickname } : {}
       });
     },
     [nickname]
@@ -217,7 +224,7 @@ export function useRoom(nickname: string | null) {
   const createRoom = useCallback(async () => {
     await runAction(setBusy, setError, async () => {
       const next = await createRemoteRoom();
-      applyRoomSession(next.room, next.session);
+      applyRoomSession(next.room, next.session, "friend");
     });
   }, [applyRoomSession]);
 
@@ -237,7 +244,7 @@ export function useRoom(nickname: string | null) {
 
       const result = await enterRemoteCasualQueue(casualPlayerKey, nickname);
       if (result.status === "matched") {
-        applyRoomSession(result.room, result.session);
+        applyRoomSession(result.room, result.session, "casual");
         setCasualSearch(emptyCasualSearch);
         return;
       }
@@ -310,7 +317,7 @@ export function useRoom(nickname: string | null) {
       setBusy(true);
       setError(null);
       const next = await joinRemoteRoom(code);
-      applyRoomSession(next.room, next.session);
+      applyRoomSession(next.room, next.session, "friend");
       return { ok: true };
     } catch (error) {
       const kind = classifyInviteJoinError(error);
@@ -364,7 +371,7 @@ export function useRoom(nickname: string | null) {
       }
 
       const next = await joinRemoteRoom(normalizedCode);
-      applyRoomSession(next.room, next.session);
+      applyRoomSession(next.room, next.session, "friend");
       return { ok: true };
     } catch (error) {
       const kind = classifyInviteJoinError(error);

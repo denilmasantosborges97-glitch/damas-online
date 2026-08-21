@@ -1,6 +1,15 @@
 import { getMovesForPiece, samePosition } from "../game/rules";
-import type { GameState, Move, Player, Position } from "../game/types";
+import type { GameState, Move, Piece, Player, Position } from "../game/types";
 import type { CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  getCaptureStepIndex,
+  getMoveAnimationKey,
+  getVisualMoveStepDuration,
+  getVisualMoveSteps,
+  positionKey,
+  type VisualMoveStep
+} from "./moveAnimation";
 
 type GameBoardProps = {
   gameState: GameState;
@@ -28,9 +37,60 @@ export function GameBoard({
   const rows = displayIndexes(viewer);
   const cols = rows;
   const selectedMoves = selected ? legalMoves.filter((move) => samePosition(move.from, selected)) : [];
+  const [activeAnimation, setActiveAnimation] = useState<BoardMoveAnimation | null>(null);
+  const lastAnimatedMove = useRef<Move | null>(null);
+  const interactionDisabled = disabled || Boolean(activeAnimation);
+
+  useEffect(() => {
+    if (!lastMove || reduceMotion) {
+      if (reduceMotion) setActiveAnimation(null);
+      return;
+    }
+
+    const animationKey = getMoveAnimationKey(lastMove);
+    if (lastAnimatedMove.current === lastMove) return;
+
+    const movingPiece = findPieceById(gameState.board, lastMove.pieceId);
+    if (!movingPiece) return;
+
+    lastAnimatedMove.current = lastMove;
+    setActiveAnimation({
+      key: animationKey,
+      move: lastMove,
+      movingPiece,
+      capturedPlayer: opponentOf(movingPiece.player),
+      steps: getVisualMoveSteps(lastMove),
+      stepIndex: 0
+    });
+  }, [gameState.board, lastMove, reduceMotion]);
+
+  useEffect(() => {
+    if (!activeAnimation) return;
+
+    const step = activeAnimation.steps[activeAnimation.stepIndex];
+    if (!step) {
+      setActiveAnimation(null);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setActiveAnimation((current) => {
+        if (!current || current.key !== activeAnimation.key) return current;
+        if (current.stepIndex >= current.steps.length - 1) return null;
+        return { ...current, stepIndex: current.stepIndex + 1 };
+      });
+    }, getVisualMoveStepDuration(step));
+
+    return () => window.clearTimeout(timer);
+  }, [activeAnimation]);
+
+  const animationLayer = useMemo(
+    () => (activeAnimation ? renderAnimationLayer(activeAnimation, viewer) : null),
+    [activeAnimation, viewer]
+  );
 
   function handleSquare(position: Position) {
-    if (disabled) return;
+    if (interactionDisabled) return;
 
     const destinationMove = selectedMoves.find((move) => samePosition(move.to, position));
     if (destinationMove) {
@@ -61,12 +121,13 @@ export function GameBoard({
             const isTarget = selectedMoves.some((move) => samePosition(move.to, position));
             const isLastFrom = lastMove ? samePosition(lastMove.from, position) : false;
             const isLastTo = lastMove ? samePosition(lastMove.to, position) : false;
-            const isCaptured = lastMove?.captures.some((capture) => samePosition(capture, position)) ?? false;
-            const isMovingPiece = Boolean(
-              lastMove && piece?.id === lastMove.pieceId && samePosition(lastMove.to, position)
+            const isHiddenAnimatedPiece = Boolean(
+              activeAnimation &&
+                piece?.id === activeAnimation.move.pieceId &&
+                samePosition(activeAnimation.move.to, position)
             );
             const isPlayablePiece =
-              !disabled &&
+              !interactionDisabled &&
               piece?.player === viewer &&
               piece.player === gameState.currentPlayer &&
               getMovesForPiece(gameState, position).length > 0;
@@ -88,18 +149,14 @@ export function GameBoard({
                 onClick={() => handleSquare(position)}
               >
                 {isTarget && <span className="target-dot" />}
-                {isCaptured && !piece && !reduceMotion && (
-                  <span className={`piece capture-ghost ${capturedPlayerFromMove(lastMove)}`} />
-                )}
                 {piece && (
                   <span
                     className={[
                       "piece",
                       piece.player,
                       piece.king ? "king" : "",
-                      isMovingPiece && !reduceMotion ? "moving-piece" : ""
+                      isHiddenAnimatedPiece ? "piece-animation-placeholder" : ""
                     ].join(" ")}
-                    style={isMovingPiece && !reduceMotion && lastMove ? slideStyle(lastMove, viewer) : undefined}
                     data-piece-id={piece.id}
                   >
                     {piece.king && <span className="king-mark">D</span>}
@@ -109,19 +166,82 @@ export function GameBoard({
             );
           })
         )}
+        {animationLayer}
       </div>
     </div>
   );
 }
 
-function slideStyle(move: Move, viewer: Player): CSSProperties {
-  const from = visualPosition(move.from, viewer);
-  const to = visualPosition(move.to, viewer);
+type BoardMoveAnimation = {
+  key: string;
+  move: Move;
+  movingPiece: Piece;
+  capturedPlayer: Player;
+  steps: VisualMoveStep[];
+  stepIndex: number;
+};
+
+function renderAnimationLayer(animation: BoardMoveAnimation, viewer: Player) {
+  const currentStep = animation.steps[animation.stepIndex];
+  if (!currentStep) return null;
+
+  return (
+    <div className="board-animation-layer" aria-hidden="true">
+      {animation.move.captures.map((capture) => {
+        const captureStepIndex = getCaptureStepIndex(animation.steps, capture);
+        const isFading = animation.stepIndex >= captureStepIndex;
+
+        return (
+          <span
+            key={`capture-${positionKey(capture)}`}
+            className={[
+              "piece",
+              animation.capturedPlayer,
+              "board-overlay-piece",
+              "animated-capture-ghost",
+              isFading ? "fade" : ""
+            ].join(" ")}
+            style={overlayPieceStyle(capture, viewer)}
+          />
+        );
+      })}
+      <span
+        key={`${animation.key}-${animation.stepIndex}`}
+        className={[
+          "piece",
+          animation.movingPiece.player,
+          animation.movingPiece.king ? "king" : "",
+          "board-overlay-piece",
+          "animated-moving-piece"
+        ].join(" ")}
+        style={movingOverlayStyle(currentStep, viewer)}
+        data-piece-id={animation.movingPiece.id}
+      >
+        {animation.movingPiece.king && <span className="king-mark">D</span>}
+      </span>
+    </div>
+  );
+}
+
+function movingOverlayStyle(step: VisualMoveStep, viewer: Player): CSSProperties {
+  const from = visualPosition(step.from, viewer);
+  const to = visualPosition(step.to, viewer);
   const squareAsPiecePercent = 100 / 0.78;
 
   return {
+    ...overlayPieceStyle(step.to, viewer),
     "--slide-x": `${(from.col - to.col) * squareAsPiecePercent}%`,
-    "--slide-y": `${(from.row - to.row) * squareAsPiecePercent}%`
+    "--slide-y": `${(from.row - to.row) * squareAsPiecePercent}%`,
+    "--move-animation-ms": `${getVisualMoveStepDuration(step)}ms`
+  } as CSSProperties;
+}
+
+function overlayPieceStyle(position: Position, viewer: Player): CSSProperties {
+  const visual = visualPosition(position, viewer);
+
+  return {
+    "--visual-row": `${visual.row}`,
+    "--visual-col": `${visual.col}`
   } as CSSProperties;
 }
 
@@ -134,8 +254,18 @@ function visualPosition(position: Position, viewer: Player): Position {
   };
 }
 
-function capturedPlayerFromMove(move: Move | null): Player {
-  return move?.pieceId.startsWith("red-") ? "black" : "red";
+function findPieceById(board: GameState["board"], pieceId: string): Piece | null {
+  for (const row of board) {
+    for (const piece of row) {
+      if (piece?.id === pieceId) return piece;
+    }
+  }
+
+  return null;
+}
+
+function opponentOf(player: Player): Player {
+  return player === "red" ? "black" : "red";
 }
 
 function displayIndexes(viewer: Player): number[] {

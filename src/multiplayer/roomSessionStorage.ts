@@ -32,7 +32,8 @@ export function loadRoomSession(code: string, storage: RoomSessionStorage = getB
       roomId: session.roomId,
       code: normalizeRoomCode(session.code),
       player: session.player,
-      token: session.token
+      token: session.token,
+      matchMode: session.matchMode === "casual" ? "casual" : "friend"
     };
   } catch {
     return null;
@@ -74,7 +75,8 @@ function isRoomSessionRecord(value: unknown): value is RoomSessionRecord {
     typeof session.code === "string" &&
     (session.player === "red" || session.player === "black") &&
     typeof session.token === "string" &&
-    typeof session.savedAt === "string"
+    typeof session.savedAt === "string" &&
+    (session.matchMode === undefined || session.matchMode === "friend" || session.matchMode === "casual")
   );
 }
 

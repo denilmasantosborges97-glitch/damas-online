@@ -3,6 +3,7 @@ import type { Board, Piece, Player, ResultReason } from "../game/types";
 import type { DisconnectState, RoomSnapshot } from "../multiplayer/types";
 import {
   canOfferDraw,
+  canRequestRematch,
   formatPieceSummary,
   hasIncomingDrawOffer,
   hasIncomingRematchRequest,
@@ -11,7 +12,9 @@ import {
   rematchDeclinedText,
   resultReasonText,
   resultTitle,
-  summarizePieces
+  shouldShowCasualPostRematchActions,
+  summarizePieces,
+  wasRematchAccepted
 } from "./experience";
 
 describe("experiencia da partida", () => {
@@ -50,10 +53,35 @@ describe("experiencia da partida", () => {
 
     expect(hasOutgoingRematchRequest(room, "red")).toBe(true);
     expect(hasIncomingRematchRequest(room, "black")).toBe(true);
+    expect(canRequestRematch(room, "red")).toBe(false);
+    expect(canRequestRematch(room, "black")).toBe(false);
 
     room.rematchDeclinedBy = "black";
+    room.rematchRed = false;
+    room.rematchBlack = false;
     expect(hasIncomingRematchRequest(room, "black")).toBe(false);
-    expect(rematchDeclinedText(room, "red")).toBe("O adversário recusou a revanche.");
+    expect(rematchDeclinedText(room, "red")).toBe("Seu adversário recusou a revanche.");
+    expect(rematchDeclinedText(room, "black")).toBe("Revanche recusada.");
+    expect(canRequestRematch(room, "red")).toBe(false);
+  });
+
+  it("detecta aceite de revanche quando a nova partida inicia", () => {
+    const previous = roomWith([], "red", "finished", "red", "no_pieces");
+    previous.rematchRed = true;
+    previous.rematchBlack = true;
+    const current = roomWith([], "red", "playing", null, null);
+    current.revision = previous.revision + 1;
+
+    expect(wasRematchAccepted(previous, current)).toBe(true);
+    expect(wasRematchAccepted(null, current)).toBe(false);
+  });
+
+  it("separa jogadores casual apos recusa de revanche", () => {
+    const room = roomWith([], "red", "finished", "red", "no_pieces");
+    room.rematchDeclinedBy = "black";
+
+    expect(shouldShowCasualPostRematchActions("casual", room)).toBe(true);
+    expect(shouldShowCasualPostRematchActions("friend", room)).toBe(false);
   });
 
   it("modela desconexao, reconexao e abandono apos tolerancia", () => {

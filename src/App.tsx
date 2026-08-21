@@ -76,6 +76,17 @@ export default function App() {
     room.leaveRoom();
   }
 
+  function leaveRoomToMenu() {
+    leaveRoom();
+    setScreen("modes");
+  }
+
+  function findNewCasualOpponent() {
+    leaveRoom();
+    setScreen("casual");
+    room.startCasualSearch();
+  }
+
   if (inviteError) {
     return <InviteStatusScreen title={inviteError} onBack={returnToStart} />;
   }
@@ -120,6 +131,8 @@ export default function App() {
         onProposeDraw={room.proposeDraw}
         onRespondDraw={room.respondToDraw}
         onLeave={leaveRoom}
+        onBackToMenu={leaveRoomToMenu}
+        onFindNewOpponent={findNewCasualOpponent}
       />
     );
   }

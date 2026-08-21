@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { shouldIncrementUnread } from "../chat/chat";
 import { useChatSettings } from "../chat/useChatSettings";
-import { deriveMoveFeedback, shouldShowTurnCue } from "../feedback/feedback";
+import { deriveMoveFeedback, getReactionAsset, shouldShowTurnCue } from "../feedback/feedback";
 import { useFeedbackEffects } from "../feedback/useFeedbackEffects";
 import { useFeedbackSettings } from "../feedback/useFeedbackSettings";
 import type { Move, Position } from "../game/types";
 import { canUseWebShare, createRoomInviteLink, shareRoomInvite } from "../multiplayer/inviteLink";
 import {
   canOfferDraw,
+  canRequestRematch,
   formatPieceSummary,
   hasIncomingDrawOffer,
   hasIncomingRematchRequest,
@@ -16,7 +17,9 @@ import {
   rematchDeclinedText,
   resultReasonText,
   resultTitle,
-  summarizePieces
+  shouldShowCasualPostRematchActions,
+  summarizePieces,
+  wasRematchAccepted
 } from "../experience/experience";
 import { playerNameFor, victoryTitleFor, type PlayerNames } from "../playerIdentity/playerLabels";
 import type {
@@ -32,6 +35,8 @@ import type {
 import { FeedbackSettingsButton } from "./FeedbackSettingsButton";
 import { ChatPanel } from "./ChatPanel";
 import { GameBoard } from "./GameBoard";
+import { getOnlineFooterStatus, hasMandatoryCaptureForTurn, reactionToastSide } from "./matchPresentation";
+import { getVisualMoveDuration } from "./moveAnimation";
 import { PlayerIdentityStrip } from "./PlayerIdentityStrip";
 import { ReactionControls } from "./ReactionControls";
 
@@ -57,6 +62,8 @@ type GameScreenProps = {
   onProposeDraw: () => void;
   onRespondDraw: (accept: boolean) => void;
   onLeave: () => void;
+  onBackToMenu: () => void;
+  onFindNewOpponent: () => void;
 };
 
 export function GameScreen({
@@ -80,12 +87,15 @@ export function GameScreen({
   onResign,
   onProposeDraw,
   onRespondDraw,
-  onLeave
+  onLeave,
+  onBackToMenu,
+  onFindNewOpponent
 }: GameScreenProps) {
   const [selected, setSelected] = useState<Position | null>(null);
   const [lastMove, setLastMove] = useState<Move | null>(null);
   const [showTurnCue, setShowTurnCue] = useState(false);
   const [showReconnectCue, setShowReconnectCue] = useState(false);
+  const [showRematchAcceptedCue, setShowRematchAcceptedCue] = useState(false);
   const [activeReaction, setActiveReaction] = useState<ReactionEvent | null>(null);
   const [confirmResign, setConfirmResign] = useState(false);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
@@ -98,6 +108,7 @@ export function GameScreen({
   const turnCueTimer = useRef<number | null>(null);
   const reactionTimer = useRef<number | null>(null);
   const reconnectTimer = useRef<number | null>(null);
+  const rematchAcceptedTimer = useRef<number | null>(null);
   const { muted: chatMuted, setMuted: setChatMuted } = useChatSettings();
   const { settings, setSoundEnabled, setVibrationEnabled, setReduceMotion } = useFeedbackSettings();
   const { playMoveSound, playCaptureSound, vibrateTurn, vibrateCapture } = useFeedbackEffects(
@@ -105,6 +116,7 @@ export function GameScreen({
     settings.vibrationEnabled
   );
   const opponent = session.player === "red" ? "black" : "red";
+  const activeReactionAsset = activeReaction ? getReactionAsset(activeReaction.value) : null;
   const playerNames: PlayerNames = {
     ...presence.playerNames,
     [session.player]: playerName
@@ -128,7 +140,7 @@ export function GameScreen({
       }
 
       if (lastMoveTimer.current) window.clearTimeout(lastMoveTimer.current);
-      lastMoveTimer.current = window.setTimeout(() => setLastMove(null), settings.reduceMotion ? 450 : 950);
+      lastMoveTimer.current = window.setTimeout(() => setLastMove(null), getVisualMoveDuration(move, settings.reduceMotion));
     },
     [playCaptureSound, playMoveSound, settings.reduceMotion, vibrateCapture]
   );
@@ -148,17 +160,22 @@ export function GameScreen({
   const outgoingDrawOffer = hasOutgoingDrawOffer(room, session.player);
   const incomingRematch = hasIncomingRematchRequest(room, session.player);
   const outgoingRematch = hasOutgoingRematchRequest(room, session.player);
-  const declinedText = room.rematchDeclinedBy
-    ? room.rematchDeclinedBy === session.player
-      ? "Você recusou a revanche."
-      : `${opponentName} recusou a revanche.`
-    : rematchDeclinedText(room, session.player);
+  const canAskRematch = canRequestRematch(room, session.player);
+  const declinedText = rematchDeclinedText(room, session.player);
+  const showCasualPostRematchActions = shouldShowCasualPostRematchActions(session.matchMode, room);
+  const footerStatus = getOnlineFooterStatus({
+    outgoingDrawOffer,
+    hasMandatoryCapture: hasMandatoryCaptureForTurn(legalMoves),
+    isPlayerTurn: room.currentPlayer === session.player,
+    opponentName
+  });
   const finalTitle = resultTitle(room, session.player);
   const didWin = room.winner === session.player;
   const finalReason = room.status === "draw" || room.status === "finished"
     ? resultReasonText(room.resultReason, didWin)
     : null;
   const finalModalTitle = room.status === "finished" ? victoryTitleFor(room.winner, playerNames) : finalTitle;
+  const finalModalVisible = Boolean(finalTitle && finalReason && !incomingRematch && !incomingDrawOffer && !confirmResign && !disconnect.active);
 
   useEffect(() => {
     if (chatOpen) {
@@ -198,6 +215,12 @@ export function GameScreen({
     const derived = deriveMoveFeedback(previous, room);
     if (derived) triggerMoveFeedback(derived.move, `move-${room.revision}`);
 
+    if (wasRematchAccepted(previous, room)) {
+      setShowRematchAcceptedCue(true);
+      if (rematchAcceptedTimer.current) window.clearTimeout(rematchAcceptedTimer.current);
+      rematchAcceptedTimer.current = window.setTimeout(() => setShowRematchAcceptedCue(false), settings.reduceMotion ? 700 : 1600);
+    }
+
     previousRoom.current = room;
   }, [room, session.player, settings.reduceMotion, triggerMoveFeedback, vibrateTurn]);
 
@@ -228,6 +251,7 @@ export function GameScreen({
       if (turnCueTimer.current) window.clearTimeout(turnCueTimer.current);
       if (reactionTimer.current) window.clearTimeout(reactionTimer.current);
       if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
+      if (rematchAcceptedTimer.current) window.clearTimeout(rematchAcceptedTimer.current);
     };
   }, []);
 
@@ -262,9 +286,14 @@ export function GameScreen({
           Adversário reconectado
         </div>
       )}
-      {activeReaction && (
-        <div className={`reaction-toast ${activeReaction.sender === session.player ? "own" : "opponent"}`} role="status">
-          {activeReaction.value}
+      {showRematchAcceptedCue && (
+        <div className="center-toast" role="status">
+          Revanche aceita. Nova partida!
+        </div>
+      )}
+      {activeReaction && activeReactionAsset && (
+        <div className={`reaction-toast ${reactionToastSide(activeReaction, session.player)}`} role="status">
+          <img src={activeReactionAsset.src} alt={activeReactionAsset.label} draggable={false} />
         </div>
       )}
 
@@ -341,23 +370,17 @@ export function GameScreen({
         onMove={onMove}
       />
 
-      <footer className="game-footer">
+      <footer className="game-footer online-game-footer">
         {room.status === "playing" ? (
           <>
-            <div className="turn-help">
-              {outgoingDrawOffer
-                ? `Aguardando resposta de ${opponentName}...`
-                : legalMoves.some((move) => move.captures.length > 0) && room.currentPlayer === session.player
-                  ? "Captura obrigatória disponível."
-                  : room.currentPlayer === session.player
-                    ? "Toque em uma peça destacada."
-                    : `Vez de ${opponentName}.`}
+            <div className={`match-status ${footerStatus ? "" : "empty"}`}>
+              {footerStatus}
             </div>
             <div className="match-actions">
-              <button className="ghost-button compact-action" type="button" disabled={busy || !canOfferDraw(room, session.player)} onClick={onProposeDraw}>
+              <button className="ghost-button compact-action match-action-button" type="button" disabled={busy || !canOfferDraw(room, session.player)} onClick={onProposeDraw}>
                 Propor empate
               </button>
-              <button className="ghost-button compact-action danger" type="button" disabled={busy} onClick={() => setConfirmResign(true)}>
+              <button className="ghost-button compact-action match-action-button danger" type="button" disabled={busy} onClick={() => setConfirmResign(true)}>
                 Desistir
               </button>
               <ReactionControls cooldownUntil={reactionCooldownUntil} onReaction={onReaction} />
@@ -389,11 +412,10 @@ export function GameScreen({
       )}
 
       {incomingRematch && (
-        <CenterModal title="Pedido de revanche">
-          <p>{opponentName} pediu revanche.</p>
+        <CenterModal title={`${opponentName} pediu revanche.`}>
           <div className="modal-actions">
             <button className="primary-button compact" type="button" disabled={busy} onClick={onRematch}>
-              Aceitar revanche
+              Aceitar
             </button>
             <button className="ghost-button compact" type="button" disabled={busy} onClick={onDeclineRematch}>
               Recusar
@@ -415,18 +437,25 @@ export function GameScreen({
         </CenterModal>
       )}
 
-      {finalTitle && finalReason && (
+      {finalModalVisible && finalTitle && finalReason && (
         <CenterModal title={finalModalTitle ?? finalTitle}>
-          <p>{finalReason}</p>
+          <p>{declinedText ?? (outgoingRematch ? "Aguardando resposta do adversário..." : finalReason)}</p>
           <div className="modal-actions">
-            <button className="primary-button compact" type="button" disabled={busy || outgoingRematch} onClick={onRematch}>
-              {outgoingRematch ? "Aguardando resposta..." : "Pedir revanche"}
-            </button>
+            {room.rematchDeclinedBy && showCasualPostRematchActions && (
+              <button className="primary-button compact" type="button" disabled={busy} onClick={onFindNewOpponent}>
+                Buscar novo adversário
+              </button>
+            )}
+            {!room.rematchDeclinedBy && !outgoingRematch && canAskRematch && (
+              <button className="primary-button compact" type="button" disabled={busy} onClick={onRematch}>
+                Pedir revanche
+              </button>
+            )}
             <button className="ghost-button compact" type="button" onClick={() => setChatOpen(true)}>
               Ver chat
             </button>
-            <button className="ghost-button compact" type="button" onClick={onLeave}>
-              Sair
+            <button className="ghost-button compact" type="button" onClick={room.rematchDeclinedBy ? onBackToMenu : onLeave}>
+              {room.rematchDeclinedBy ? "Voltar ao menu" : "Sair"}
             </button>
           </div>
         </CenterModal>

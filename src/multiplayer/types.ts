@@ -41,6 +41,7 @@ export type PlayerSession = {
   code: string;
   player: Player;
   token: string;
+  matchMode?: "friend" | "casual";
 };
 
 export type PresenceState = {
@@ -55,7 +56,7 @@ export type DisconnectState = {
   reconnected: boolean;
 };
 
-export type ReactionValue = "👍" | "👏" | "😮" | "GG" | "Boa jogada!";
+export type ReactionValue = "smile" | "cry" | "clap" | "angry";
 
 export type ReactionEvent = {
   id: string;

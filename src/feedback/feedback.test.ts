@@ -4,6 +4,7 @@ import type { RoomSnapshot } from "../multiplayer/types";
 import {
   canSendReaction,
   deriveMoveFeedback,
+  getReactionAsset,
   getReactionCooldownRemaining,
   isReactionValue,
   normalizeFeedbackSettings,
@@ -19,9 +20,17 @@ describe("feedback visual e interacao", () => {
   });
 
   it("aceita apenas reacoes predefinidas", () => {
-    expect(isReactionValue("GG")).toBe(true);
-    expect(isReactionValue("Boa jogada!")).toBe(true);
+    expect(isReactionValue("smile")).toBe(true);
+    expect(isReactionValue("clap")).toBe(true);
     expect(isReactionValue("mensagem livre")).toBe(false);
+  });
+
+  it("mapeia reacoes para imagens transparentes locais", () => {
+    expect(getReactionAsset("smile")).toMatchObject({
+      label: "Sorrir",
+      src: "/reactions/sorrir.png"
+    });
+    expect(getReactionAsset("angry").src).toBe("/reactions/raiva.png");
   });
 
   it("normaliza configuracoes de som, vibracao e reducao de movimento", () => {

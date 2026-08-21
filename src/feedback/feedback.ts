@@ -1,8 +1,37 @@
 import type { Move, Player, Position } from "../game/types";
 import type { ReactionValue, RoomSnapshot } from "../multiplayer/types";
 
-export const REACTION_OPTIONS: ReactionValue[] = ["👍", "👏", "😮", "GG", "Boa jogada!"];
+export const REACTION_OPTIONS: ReactionValue[] = ["smile", "cry", "clap", "angry"];
 export const REACTION_COOLDOWN_MS = 2500;
+
+export type ReactionAsset = {
+  value: ReactionValue;
+  label: string;
+  src: string;
+};
+
+export const REACTION_ASSETS: Record<ReactionValue, ReactionAsset> = {
+  smile: {
+    value: "smile",
+    label: "Sorrir",
+    src: "/reactions/sorrir.png"
+  },
+  cry: {
+    value: "cry",
+    label: "Chorar",
+    src: "/reactions/chorar.png"
+  },
+  clap: {
+    value: "clap",
+    label: "Aplaudir",
+    src: "/reactions/aplaudir.png"
+  },
+  angry: {
+    value: "angry",
+    label: "Raiva",
+    src: "/reactions/raiva.png"
+  }
+};
 
 export type FeedbackSettings = {
   soundEnabled: boolean;
@@ -52,6 +81,10 @@ export function getReactionCooldownRemaining(
 
 export function isReactionValue(value: unknown): value is ReactionValue {
   return typeof value === "string" && REACTION_OPTIONS.includes(value as ReactionValue);
+}
+
+export function getReactionAsset(value: ReactionValue): ReactionAsset {
+  return REACTION_ASSETS[value];
 }
 
 export function shouldShowTurnCue(

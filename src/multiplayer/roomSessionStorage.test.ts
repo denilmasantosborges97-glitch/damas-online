@@ -9,7 +9,8 @@ describe("armazenamento local da sessao da sala", () => {
       roomId: "room-1",
       code: "47aa2",
       player: "red",
-      token: "token-privado"
+      token: "token-privado",
+      matchMode: "casual"
     };
 
     saveRoomSession(session, storage);
@@ -19,7 +20,8 @@ describe("armazenamento local da sessao da sala", () => {
       roomId: "room-1",
       code: "47AA2",
       player: "red",
-      token: "token-privado"
+      token: "token-privado",
+      matchMode: "casual"
     });
   });
 });
