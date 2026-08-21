@@ -11,6 +11,8 @@ import {
   type VisualMoveStep
 } from "./moveAnimation";
 import { getPieceAsset } from "./pieceAssets";
+import { BoardThemeTester } from "./BoardThemeTester";
+import { DEFAULT_BOARD_THEME_ID, getBoardTheme, getBoardThemeStyle, type BoardThemeId } from "./boardThemes";
 
 type GameBoardProps = {
   gameState: GameState;
@@ -50,8 +52,11 @@ export function GameBoard({
     [legalMoves]
   );
   const [activeAnimation, setActiveAnimation] = useState<BoardMoveAnimation | null>(null);
+  const [boardThemeId, setBoardThemeId] = useState<BoardThemeId>(DEFAULT_BOARD_THEME_ID);
   const lastAnimatedMove = useRef<Move | null>(null);
   const interactionDisabled = disabled || Boolean(activeAnimation);
+  const boardTheme = useMemo(() => getBoardTheme(boardThemeId), [boardThemeId]);
+  const boardStyle = useMemo(() => getBoardThemeStyle(boardTheme), [boardTheme]);
 
   useEffect(() => {
     if (!lastMove || reduceMotion) {
@@ -123,7 +128,8 @@ export function GameBoard({
 
   return (
     <div className="board-shell" aria-label="Tabuleiro de damas">
-      <div className="board">
+      <BoardThemeTester selected={boardTheme.id} onChange={setBoardThemeId} />
+      <div className="board" style={boardStyle} data-board-theme={boardTheme.id}>
         <div className="board-grid">
           {rows.map((row) =>
             cols.map((col) => {

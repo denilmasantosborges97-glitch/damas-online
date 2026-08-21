@@ -566,6 +566,7 @@ button:disabled {
   width: 100%;
   display: grid;
   place-items: center;
+  gap: 8px;
 }
 
 .board {
@@ -573,15 +574,47 @@ button:disabled {
   --board-grid-right: 8.17%;
   --board-grid-top: 8.13%;
   --board-grid-bottom: 8.69%;
+  --board-image: url("/boards/wood-board.png");
   width: min(94vw, calc(100svh - 198px), 560px);
   aspect-ratio: 1;
   position: relative;
   box-sizing: border-box;
   border: 0;
   border-radius: 0;
-  background: url("/boards/wood-board.png") center / contain no-repeat;
+  background: var(--board-image) center / contain no-repeat;
   overflow: hidden;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.26);
+}
+
+.board-shell:has(.board-theme-tester) .board {
+  width: min(94vw, calc(100svh - 246px), 560px);
+}
+
+.board-theme-tester {
+  width: min(94vw, 560px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 10px;
+  padding: 7px 9px;
+  background: rgba(22, 19, 14, 0.7);
+  color: #f4ead4;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.board-theme-tester select {
+  min-width: 0;
+  flex: 0 1 190px;
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: #17140f;
+  color: #fff8e8;
+  font: inherit;
+  padding: 0 8px;
 }
 
 .board-grid {
@@ -1338,6 +1371,10 @@ button:disabled {
 
   .board {
     width: min(94vw, calc(100svh - 168px));
+  }
+
+  .board-shell:has(.board-theme-tester) .board {
+    width: min(94vw, calc(100svh - 214px));
   }
 
   .compact-action {
