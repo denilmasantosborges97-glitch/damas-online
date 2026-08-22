@@ -206,6 +206,17 @@ h1 {
   gap: 10px;
 }
 
+.account-return-message {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(226, 190, 82, 0.32);
+  border-radius: 8px;
+  background: rgba(226, 190, 82, 0.14);
+  color: #f6e9be;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .text-button {
   min-height: 40px;
   border: 0;
@@ -255,6 +266,101 @@ h1 {
 }
 
 .profile-modal .profile-form {
+  width: 100%;
+}
+
+.account-profile-modal {
+  width: min(100%, 430px);
+  display: grid;
+  gap: 12px;
+  max-height: min(92dvh, 720px);
+  overflow-y: auto;
+}
+
+.profile-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-modal-header h2 {
+  margin: 0;
+}
+
+.account-status-card {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.account-status-card strong,
+.account-status-card small {
+  display: block;
+}
+
+.account-status-card small {
+  margin-top: 3px;
+  color: #d9d0bb;
+  line-height: 1.28;
+}
+
+.account-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.account-status-dot.connected {
+  background: #55df7a;
+  box-shadow: 0 0 0 4px rgba(85, 223, 122, 0.14);
+}
+
+.account-status-dot.guest {
+  background: #d2b96d;
+  box-shadow: 0 0 0 4px rgba(210, 185, 109, 0.14);
+}
+
+.future-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.future-stats-grid span {
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e9dfc8;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 820;
+}
+
+.compact-profile-form {
+  gap: 8px;
+}
+
+.compact-profile-form input {
+  min-height: 48px;
+  font-size: 1rem;
+}
+
+.compact-subtle {
+  margin-top: 0;
+  font-size: 0.86rem;
+}
+
+.full-width-button {
   width: 100%;
 }
 

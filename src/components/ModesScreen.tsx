@@ -2,15 +2,27 @@ import { formatOnlineCountState, type OnlineCountState } from "../multiplayer/gl
 
 type ModesScreenProps = {
   playerName: string;
+  accountStatus: "guest" | "loading" | "authenticated";
+  accountMessage?: string | null;
   onlineCount: OnlineCountState;
-  onEditNickname: () => void;
+  onOpenProfile: () => void;
   onFriend: () => void;
   onComputer: () => void;
   onCasual: () => void;
 };
 
-export function ModesScreen({ playerName, onlineCount, onEditNickname, onFriend, onComputer, onCasual }: ModesScreenProps) {
+export function ModesScreen({
+  playerName,
+  accountStatus,
+  accountMessage,
+  onlineCount,
+  onOpenProfile,
+  onFriend,
+  onComputer,
+  onCasual
+}: ModesScreenProps) {
   const onlineText = formatOnlineCountState(onlineCount);
+  const accountLabel = accountStatus === "authenticated" ? "Conta conectada" : accountStatus === "loading" ? "Verificando conta..." : "Visitante";
 
   return (
     <main className="lobby mode-screen">
@@ -25,11 +37,14 @@ export function ModesScreen({ playerName, onlineCount, onEditNickname, onFriend,
           </p>
         )}
         <div className="profile-line">
-          <span>Jogando como: <strong>{playerName}</strong></span>
-          <button className="text-button" type="button" onClick={onEditNickname}>
-            Editar apelido
+          <span>
+            Jogando como: <strong>{playerName}</strong> · {accountLabel}
+          </span>
+          <button className="text-button" type="button" onClick={onOpenProfile}>
+            Perfil
           </button>
         </div>
+        {accountMessage && <p className="account-return-message">{accountMessage}</p>}
       </section>
 
       <section className="mode-grid" aria-label="Modos de jogo">

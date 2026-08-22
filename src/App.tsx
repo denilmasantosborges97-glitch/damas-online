@@ -5,12 +5,14 @@ import { GameScreen } from "./components/GameScreen";
 import { Lobby } from "./components/Lobby";
 import { ModesScreen } from "./components/ModesScreen";
 import { NicknameForm } from "./components/NicknameForm";
+import { ProfilePanel } from "./components/ProfilePanel";
 import { SoloGameScreen } from "./components/SoloGameScreen";
 import { SoloSetupScreen } from "./components/SoloSetupScreen";
 import type { Player } from "./game/types";
 import { inviteErrorMessage, readRoomInviteFromUrl } from "./multiplayer/inviteLink";
 import { useGlobalOnlineCount } from "./multiplayer/useGlobalOnlineCount";
 import { useRoom } from "./multiplayer/useRoom";
+import { usePlayerAccount } from "./playerAccount/usePlayerAccount";
 import { usePlayerIdentity } from "./playerIdentity/usePlayerIdentity";
 
 type AppScreen = "modes" | "friend" | "solo-setup" | "solo-game" | "casual";
@@ -22,11 +24,13 @@ type SoloConfig = {
 export default function App() {
   const initialInvite = useMemo(() => readRoomInviteFromUrl(window.location.href), []);
   const playerIdentity = usePlayerIdentity();
+  const playerAccount = usePlayerAccount();
+  const effectiveNickname = playerAccount.profile?.nickname ?? playerIdentity.nickname;
   const onlineCount = useGlobalOnlineCount();
-  const room = useRoom(playerIdentity.nickname);
+  const room = useRoom(effectiveNickname);
   const [screen, setScreen] = useState<AppScreen>("modes");
   const [soloConfig, setSoloConfig] = useState<SoloConfig | null>(null);
-  const [editingNickname, setEditingNickname] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [inviteCode, setInviteCode] = useState(initialInvite.status === "valid" ? initialInvite.code : null);
   const [inviteError, setInviteError] = useState<string | null>(
     initialInvite.status === "invalid" ? inviteErrorMessage("unavailable") : null
@@ -35,7 +39,7 @@ export default function App() {
   const inviteAttempted = useRef(false);
 
   useEffect(() => {
-    if (!playerIdentity.nickname || !inviteCode || room.room || inviteAttempted.current) return;
+    if (!effectiveNickname || !inviteCode || room.room || inviteAttempted.current) return;
 
     inviteAttempted.current = true;
     setInviteJoining(true);
@@ -52,7 +56,14 @@ export default function App() {
         setInviteCode(null);
       })
       .finally(() => setInviteJoining(false));
-  }, [inviteCode, playerIdentity.nickname, room]);
+  }, [effectiveNickname, inviteCode, room]);
+
+  useEffect(() => {
+    const profileNickname = playerAccount.profile?.nickname;
+    if (!profileNickname || playerIdentity.nickname === profileNickname) return;
+
+    playerIdentity.saveNickname(profileNickname);
+  }, [playerAccount.profile?.nickname, playerIdentity]);
 
   function clearInviteUrl() {
     const url = new URL(window.location.href);
@@ -91,7 +102,11 @@ export default function App() {
     return <InviteStatusScreen title={inviteError} onBack={returnToStart} />;
   }
 
-  if (!playerIdentity.nickname) {
+  if (!effectiveNickname && playerAccount.status === "loading") {
+    return <InviteStatusScreen title="Carregando perfil..." />;
+  }
+
+  if (!effectiveNickname) {
     return (
       <main className="lobby nickname-screen">
         <section className="brand-panel" aria-label="Identidade do jogador">
@@ -102,6 +117,7 @@ export default function App() {
             submitLabel="Continuar"
             onSubmit={(nickname) => playerIdentity.saveNickname(nickname).valid}
           />
+          {playerAccount.error && <p className="account-return-message">{playerAccount.error}</p>}
         </section>
       </main>
     );
@@ -112,7 +128,7 @@ export default function App() {
       <GameScreen
         room={room.room}
         session={room.session}
-        playerName={playerIdentity.nickname}
+        playerName={effectiveNickname}
         presence={room.presence}
         disconnect={room.disconnect}
         legalMoves={room.legalMoves}
@@ -146,7 +162,7 @@ export default function App() {
       <SoloGameScreen
         difficulty={soloConfig.difficulty}
         player={soloConfig.player}
-        playerName={playerIdentity.nickname}
+        playerName={effectiveNickname}
         onChangeSetup={() => setScreen("solo-setup")}
         onBackToModes={() => {
           setSoloConfig(null);
@@ -174,7 +190,7 @@ export default function App() {
   if (screen === "friend") {
     return (
       <Lobby
-        playerName={playerIdentity.nickname}
+        playerName={effectiveNickname}
         canUseOnline={room.hasSupabaseConfig}
         busy={room.busy}
         error={room.error}
@@ -188,7 +204,7 @@ export default function App() {
   if (screen === "casual") {
     return (
       <CasualMatchScreen
-        playerName={playerIdentity.nickname}
+        playerName={effectiveNickname}
         canUseOnline={room.hasSupabaseConfig}
         search={room.casualSearch}
         onStart={room.startCasualSearch}
@@ -203,29 +219,26 @@ export default function App() {
   return (
     <>
       <ModesScreen
-        playerName={playerIdentity.nickname}
+        playerName={effectiveNickname}
+        accountStatus={playerAccount.status}
+        accountMessage={playerAccount.error}
         onlineCount={onlineCount}
-        onEditNickname={() => setEditingNickname(true)}
+        onOpenProfile={() => setProfileOpen(true)}
         onFriend={() => setScreen("friend")}
         onComputer={() => setScreen("solo-setup")}
         onCasual={() => setScreen("casual")}
       />
-      {editingNickname && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Editar apelido">
-          <div className="center-modal profile-modal">
-            <NicknameForm
-              initialNickname={playerIdentity.nickname}
-              title="Editar apelido"
-              submitLabel="Salvar apelido"
-              onSubmit={(nickname) => {
-                const result = playerIdentity.saveNickname(nickname);
-                if (result.valid) setEditingNickname(false);
-                return result.valid;
-              }}
-              onCancel={() => setEditingNickname(false)}
-            />
-          </div>
-        </div>
+      {profileOpen && (
+        <ProfilePanel
+          account={playerAccount}
+          localIdentity={playerIdentity.identity}
+          playerName={effectiveNickname}
+          onSaveGuestNickname={(nickname) => {
+            const result = playerIdentity.saveNickname(nickname);
+            return result.valid;
+          }}
+          onClose={() => setProfileOpen(false)}
+        />
       )}
     </>
   );

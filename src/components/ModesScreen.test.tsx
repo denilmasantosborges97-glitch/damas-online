@@ -20,14 +20,23 @@ describe("ModesScreen", () => {
 
     expect(html).toContain("12 online agora");
   });
+
+  it("renderiza estado de visitante no menu", () => {
+    const html = renderModes({ status: "ready", count: 1 });
+
+    expect(html).toContain("Jogando como:");
+    expect(html).toContain("Visitante");
+    expect(html).toContain("Perfil");
+  });
 });
 
 function renderModes(onlineCount: Parameters<typeof ModesScreen>[0]["onlineCount"]): string {
   return renderToStaticMarkup(
     <ModesScreen
       playerName="Wesley"
+      accountStatus="guest"
       onlineCount={onlineCount}
-      onEditNickname={() => undefined}
+      onOpenProfile={() => undefined}
       onFriend={() => undefined}
       onComputer={() => undefined}
       onCasual={() => undefined}
